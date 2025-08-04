@@ -1,6 +1,9 @@
 
 import CreateRoleForm from "@/shared/widgets/dashboard/CreateRoleForm";
 
+
+export const dynamic = "force-dynamic"
+
 export default function RolesPage({ user, error }: { user: any; error: string | null }) {
   return (
     <div>
