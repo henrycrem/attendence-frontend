@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useAuth } from "apps/user-ui/src/contexts/AuthContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { MapPin, Users, Wifi, WifiOff, Eye } from "lucide-react";
 import { Toaster, toast } from "react-hot-toast";
-import { getAllEmployees } from "apps/user-ui/src/actions/attendence";
+import { getAllEmployees } from "@/actions/attendence";
 
 interface Employee {
   id: string; // employeeId

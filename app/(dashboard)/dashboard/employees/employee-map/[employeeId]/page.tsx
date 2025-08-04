@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react"
-import { useAuth } from "apps/user-ui/src/contexts/AuthContext"
+import { useAuth } from "@/contexts/AuthContext"
 import { useRouter, useParams } from "next/navigation"
 import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap, Circle } from "react-leaflet"
 import L, { type LatLngTuple } from "leaflet"
@@ -27,8 +27,8 @@ import {
   Crosshair,
 } from "lucide-react"
 import toast, { Toaster } from "react-hot-toast"
-import { getEmployeeDetails, getUserIdFromEmployeeId } from "apps/user-ui/src/actions/attendence"
-import { GPSAccuracyOptimizer } from "apps/user-ui/src/components/gps-accuracy-optimizer" 
+import { getEmployeeDetails, getUserIdFromEmployeeId } from "@/actions/attendence"
+import { GPSAccuracyOptimizer } from "@/components/gps-accuracy-optimizer" 
 
 // Enhanced Employee's current location icon with pulsing effect
 const currentLocationIcon = new L.Icon({
