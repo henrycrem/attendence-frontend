@@ -2,12 +2,14 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { BrowserQRCodeReader } from "@zxing/library";
+
 import { MapPin, Wifi, QrCode, Navigation, Calendar, CheckCircle, XCircle, AlertCircle } from "lucide-react";
 
 import { checkIn, checkOut, getWorkplaces, getEmployeeDetails } from "@/actions/attendence";
 import axios from "axios";
 import toast, { Toaster } from "react-hot-toast";
+// @ts-ignore
+import { BrowserQRCodeReader } from '@zxing/library';
 
 const NewAttendancePage = () => {
   const { user, token, socket, isAuthenticated } = useAuth();
