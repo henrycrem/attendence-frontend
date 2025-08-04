@@ -1,6 +1,7 @@
 import { getCurrentUserAction } from "@/actions/auth";
   import ClientDashboardLayout from "./ClientDashboardLayout";
 
+export const dynamic = 'force-dynamic';
 
   export default async function DashboardServer({ children }: { children: React.ReactNode }) {
     let user = null;
