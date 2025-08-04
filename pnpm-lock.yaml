@@ -123,7 +123,7 @@ dependencies:
     specifier: ^4.0.0
     version: 4.0.0
   leaflet:
-    specifier: ^1.9.4
+    specifier: ^1.8.0
     version: 1.9.4
   lucide-react:
     specifier: ^0.536.0
@@ -191,7 +191,7 @@ devDependencies:
     specifier: ^3.1.0
     version: 3.1.0
   '@types/leaflet':
-    specifier: ^1.9.20
+    specifier: ^1.9.15
     version: 1.9.20
   '@types/node':
     specifier: ^20
