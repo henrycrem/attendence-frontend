@@ -6,7 +6,7 @@ import { Users, Shield, Settings, Calendar, FileText, Check, X, Save, Clock, Use
 import axios from "axios"
 import toast from "react-hot-toast"
 
-import { usePermissions, PERMISSIONS  } from "apps/user-ui/src/hooks/permissions"
+import { usePermissions, PERMISSIONS  } from "@/hooks/permissions"
 
 // Dynamic interfaces for API data
 interface DynamicPermission {
