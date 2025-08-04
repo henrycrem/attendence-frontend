@@ -1,5 +1,5 @@
 
-import CreateRoleForm from "apps/user-ui/src/shared/widgets/dashboard/CreateRoleForm";
+import CreateRoleForm from "@/shared/widgets/dashboard/CreateRoleForm";
 
 export default function RolesPage({ user, error }: { user: any; error: string | null }) {
   return (
