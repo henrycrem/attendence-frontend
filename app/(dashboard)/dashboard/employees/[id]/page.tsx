@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useAuth } from "apps/user-ui/src/contexts/AuthContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useRouter, useParams } from "next/navigation";
 import { MapContainer, TileLayer, Marker, Polyline, Popup } from "react-leaflet";
 import L, { LatLngTuple } from "leaflet";
 import { MapPin, AlertCircle, CheckCircle, ArrowLeft, User, Clock, Wifi, WifiOff } from "lucide-react";
 import { Toaster, toast } from "react-hot-toast";
-import { getEmployeeDetails } from "apps/user-ui/src/actions/attendence";
+import { getEmployeeDetails } from "@/actions/attendence";
 
 // Custom marker icons
 const currentLocationIcon = new L.Icon({
