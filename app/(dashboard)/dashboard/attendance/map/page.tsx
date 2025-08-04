@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useAuth } from "apps/user-ui/src/contexts/AuthContext";
+import { useAuth } from "@/contexts/AuthContext"; 
 import { MapContainer, TileLayer, Marker, Polyline, Popup } from "react-leaflet";
 import L, { LatLngTuple } from "leaflet";
 import { MapPin, AlertCircle, CheckCircle } from "lucide-react";
 import { Toaster, toast } from "react-hot-toast";
-import { getEmployeeDetails } from "apps/user-ui/src/actions/attendence";
+import { getEmployeeDetails } from "@/actions/attendence";
 
 // Custom marker icon
 const customIcon = new L.Icon({
