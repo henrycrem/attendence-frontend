@@ -1,10 +1,11 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { useAuth } from "apps/user-ui/src/contexts/AuthContext"
+import { useAuth } from "@/contexts/AuthContext"
+// @ts-ignore
 import { BrowserQRCodeReader } from "@zxing/library"
 import { MapPin, Wifi, QrCode, Navigation, Calendar, CheckCircle, XCircle, AlertCircle } from "lucide-react"
-import { checkIn, checkOut, getWorkplaces, getEmployeeDetails } from "apps/user-ui/src/actions/attendence"
+import { checkIn, checkOut, getWorkplaces, getEmployeeDetails } from "@/actions/attendence"
 import axios from "axios"
 import toast, { Toaster } from "react-hot-toast"
 
