@@ -4,6 +4,8 @@ import ReportSection from '@/shared/widgets/dashboard/report-sec'
 import StatCards from '@/shared/widgets/dashboard/startsCard'
 import React from 'react'
 
+export const dynamic = "force-dynamic"
+
 const DashboardPage = () => {
   return (
     <div>
