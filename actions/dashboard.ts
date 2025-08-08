@@ -1,6 +1,7 @@
 "use server"
 import { cookies } from "next/headers"
 import { getCurrentUserAction } from "./auth"
+import { handleError, errorHandlers } from "../errorHandler"
 
 class AuthenticationError extends Error {
   statusCode: number
@@ -11,14 +12,14 @@ class AuthenticationError extends Error {
   }
 }
 
-// ✅ Get auth headers
+// ✅ Get auth headers with better error handling
 const getAuthHeaders = async () => {
   const cookieStore = await cookies()
   const accessToken = cookieStore.get("access_token")?.value
   
   if (!accessToken) {
     console.error("getAuthHeaders: No access token found")
-    throw new AuthenticationError("No access token found. Please log in.", 401)
+    throw new AuthenticationError("Your session has expired. Please log in again.", 401)
   }
   
   return {
@@ -27,7 +28,7 @@ const getAuthHeaders = async () => {
   }
 }
 
-// ✅ Check user role helper
+// ✅ Check user role helper with better error handling
 const checkUserRole = async () => {
   try {
     const user = await getCurrentUserAction()
@@ -38,8 +39,31 @@ const checkUserRole = async () => {
       isEmployee: user?.role?.roleName === 'employee'
     }
   } catch (error) {
-    throw new AuthenticationError("Unable to verify user role", 401)
+    throw new AuthenticationError("Unable to verify your account. Please log in again.", 401)
   }
+}
+
+// ✅ Enhanced fetch with retry mechanism
+const fetchWithRetry = async (url: string, options: RequestInit, retries = 2): Promise<Response> => {
+  for (let i = 0; i <= retries; i++) {
+    try {
+      const response = await fetch(url, options)
+      
+      // If it's a 401, don't retry - it's an auth issue
+      if (response.status === 401) {
+        throw new AuthenticationError("Your session has expired. Please log in again.", 401)
+      }
+      
+      return response
+    } catch (error) {
+      if (i === retries) throw error
+      
+      // Wait before retrying (exponential backoff)
+      await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000))
+    }
+  }
+  
+  throw new Error("Maximum retries exceeded")
 }
 
 // ✅ Admin Dashboard Actions (Only for super_admin)
@@ -48,28 +72,39 @@ export async function getAdminDashboardStats() {
     const { isAdmin } = await checkUserRole()
     
     if (!isAdmin) {
-      throw new AuthenticationError("Access denied. Admin privileges required.", 403)
+      throw new AuthenticationError("Access denied. Administrator privileges required.", 403)
     }
 
     const headers = await getAuthHeaders()
     
-    const response = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/api/admin/stats`, {
-      method: 'GET',
-      headers,
-      cache: 'no-store',
-    })
+    const response = await fetchWithRetry(
+      `${process.env.NEXT_PUBLIC_SERVER_URL}/api/admin/stats`,
+      {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      }
+    )
 
     if (!response.ok) {
       const errorText = await response.text()
       console.error("getAdminDashboardStats: Error response:", errorText)
-      throw new Error(`Failed to fetch dashboard stats: ${response.status}`)
+      
+      if (response.status === 403) {
+        throw new AuthenticationError("Access denied. Administrator privileges required.", 403)
+      }
+      
+      throw new Error(`Failed to load dashboard statistics: ${response.status}`)
     }
 
     const data = await response.json()
     return { success: true, data: data.data }
   } catch (error: any) {
     console.error("getAdminDashboardStats: Error:", error)
-    throw new Error(error.message || "Failed to fetch dashboard statistics")
+    
+    // Use error handler for user-friendly messages
+    const friendlyMessage = errorHandlers.auth(error, false)
+    throw new Error(friendlyMessage)
   }
 }
 
@@ -84,7 +119,7 @@ export async function getTodayAttendanceRecords(params: {
     const { isAdmin } = await checkUserRole()
     
     if (!isAdmin) {
-      throw new AuthenticationError("Access denied. Admin privileges required.", 403)
+      throw new AuthenticationError("Access denied. Administrator privileges required.", 403)
     }
 
     const headers = await getAuthHeaders()
@@ -97,7 +132,7 @@ export async function getTodayAttendanceRecords(params: {
     
     console.log("getTodayAttendanceRecords: Fetching with params:", params)
     
-    const response = await fetch(
+    const response = await fetchWithRetry(
       `${process.env.NEXT_PUBLIC_SERVER_URL}/api/admin/attendance/today?${searchParams}`,
       {
         method: 'GET',
@@ -109,7 +144,12 @@ export async function getTodayAttendanceRecords(params: {
     if (!response.ok) {
       const errorText = await response.text()
       console.error("getTodayAttendanceRecords: Error response:", errorText)
-      throw new Error(`Failed to fetch attendance records: ${response.status}`)
+      
+      if (response.status === 403) {
+        throw new AuthenticationError("Access denied. Administrator privileges required.", 403)
+      }
+      
+      throw new Error(`Failed to load attendance records: ${response.status}`)
     }
 
     const data = await response.json()
@@ -117,7 +157,10 @@ export async function getTodayAttendanceRecords(params: {
     return { success: true, data: data.data }
   } catch (error: any) {
     console.error("getTodayAttendanceRecords: Error:", error)
-    throw new Error(error.message || "Failed to fetch attendance records")
+    
+    // Use error handler for user-friendly messages
+    const friendlyMessage = errorHandlers.auth(error, false)
+    throw new Error(friendlyMessage)
   }
 }
 
@@ -127,7 +170,7 @@ export async function getHourlyAttendanceFlow(date?: string) {
     const { isAdmin } = await checkUserRole()
     
     if (!isAdmin) {
-      throw new AuthenticationError("Access denied. Admin privileges required.", 403)
+      throw new AuthenticationError("Access denied. Administrator privileges required.", 403)
     }
 
     const headers = await getAuthHeaders()
@@ -137,7 +180,7 @@ export async function getHourlyAttendanceFlow(date?: string) {
     
     console.log("getHourlyAttendanceFlow: Fetching for date:", date || 'today')
     
-    const response = await fetch(
+    const response = await fetchWithRetry(
       `${process.env.NEXT_PUBLIC_SERVER_URL}/api/admin/attendance/hourly-flow?${searchParams}`,
       {
         method: 'GET',
@@ -149,7 +192,12 @@ export async function getHourlyAttendanceFlow(date?: string) {
     if (!response.ok) {
       const errorText = await response.text()
       console.error("getHourlyAttendanceFlow: Error response:", errorText)
-      throw new Error(`Failed to fetch hourly flow data: ${response.status}`)
+      
+      if (response.status === 403) {
+        throw new AuthenticationError("Access denied. Administrator privileges required.", 403)
+      }
+      
+      throw new Error(`Failed to load attendance flow data: ${response.status}`)
     }
 
     const data = await response.json()
@@ -157,7 +205,10 @@ export async function getHourlyAttendanceFlow(date?: string) {
     return { success: true, data: data.data }
   } catch (error: any) {
     console.error("getHourlyAttendanceFlow: Error:", error)
-    throw new Error(error.message || "Failed to fetch hourly attendance flow")
+    
+    // Use error handler for user-friendly messages
+    const friendlyMessage = errorHandlers.auth(error, false)
+    throw new Error(friendlyMessage)
   }
 }
 
@@ -172,7 +223,7 @@ export async function exportAttendanceData(params: {
     const { isAdmin } = await checkUserRole()
     
     if (!isAdmin) {
-      throw new AuthenticationError("Access denied. Admin privileges required.", 403)
+      throw new AuthenticationError("Access denied. Administrator privileges required.", 403)
     }
 
     const headers = await getAuthHeaders()
@@ -185,7 +236,7 @@ export async function exportAttendanceData(params: {
     
     console.log("exportAttendanceData: Exporting with params:", params)
     
-    const response = await fetch(
+    const response = await fetchWithRetry(
       `${process.env.NEXT_PUBLIC_SERVER_URL}/api/admin/attendance/export?${searchParams}`,
       {
         method: 'GET',
@@ -197,6 +248,11 @@ export async function exportAttendanceData(params: {
     if (!response.ok) {
       const errorText = await response.text()
       console.error("exportAttendanceData: Error response:", errorText)
+      
+      if (response.status === 403) {
+        throw new AuthenticationError("Access denied. Administrator privileges required.", 403)
+      }
+      
       throw new Error(`Failed to export attendance data: ${response.status}`)
     }
 
@@ -206,7 +262,10 @@ export async function exportAttendanceData(params: {
     return { success: true, blob, filename: `attendance-${new Date().toISOString().split('T')[0]}.csv` }
   } catch (error: any) {
     console.error("exportAttendanceData: Error:", error)
-    throw new Error(error.message || "Failed to export attendance data")
+    
+    // Use error handler for user-friendly messages
+    const friendlyMessage = errorHandlers.auth(error, false)
+    throw new Error(friendlyMessage)
   }
 }
 
@@ -223,16 +282,24 @@ export async function getEmployeeAttendanceData() {
     
     console.log("getEmployeeAttendanceData: Fetching employee data")
     
-    const response = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/api/employee/attendance-data`, {
-      method: 'GET',
-      headers,
-      cache: 'no-store',
-    })
+    const response = await fetchWithRetry(
+      `${process.env.NEXT_PUBLIC_SERVER_URL}/api/employee/attendance-data`,
+      {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      }
+    )
 
     if (!response.ok) {
       const errorText = await response.text()
       console.error("getEmployeeAttendanceData: Error response:", errorText)
-      throw new Error(`Failed to fetch employee attendance data: ${response.status}`)
+      
+      if (response.status === 403) {
+        throw new AuthenticationError("Access denied. Employee privileges required.", 403)
+      }
+      
+      throw new Error(`Failed to load attendance data: ${response.status}`)
     }
 
     const data = await response.json()
@@ -240,7 +307,10 @@ export async function getEmployeeAttendanceData() {
     return { success: true, data: data.data }
   } catch (error: any) {
     console.error("getEmployeeAttendanceData: Error:", error)
-    throw new Error(error.message || "Failed to fetch employee attendance data")
+    
+    // Use error handler for user-friendly messages
+    const friendlyMessage = errorHandlers.auth(error, false)
+    throw new Error(friendlyMessage)
   }
 }
 
@@ -274,7 +344,7 @@ export async function getEmployeeAttendanceHistory({
     console.log("getEmployeeAttendanceHistory: Fetching with params:", { page, limit, month, year })
 
     const url = `${process.env.NEXT_PUBLIC_SERVER_URL}/api/employee/attendance-history?${searchParams}`
-    const response = await fetch(url, {
+    const response = await fetchWithRetry(url, {
       method: 'GET',
       headers,
       cache: 'no-store',
@@ -283,7 +353,12 @@ export async function getEmployeeAttendanceHistory({
     if (!response.ok) {
       const errorText = await response.text()
       console.error('getEmployeeAttendanceHistory: Error response:', response.status, errorText)
-      throw new Error(`Failed to fetch attendance history: ${response.status}`)
+      
+      if (response.status === 403) {
+        throw new AuthenticationError("Access denied. Employee privileges required.", 403)
+      }
+      
+      throw new Error(`Failed to load attendance history: ${response.status}`)
     }
 
     const data = await response.json()
@@ -291,7 +366,10 @@ export async function getEmployeeAttendanceHistory({
     return { success: true, data: data.data }
   } catch (error: any) {
     console.error("getEmployeeAttendanceHistory: Error:", error)
-    throw new Error(error.message || "Failed to fetch attendance history")
+    
+    // Use error handler for user-friendly messages
+    const friendlyMessage = errorHandlers.auth(error, false)
+    throw new Error(friendlyMessage)
   }
 }
 
@@ -311,7 +389,10 @@ export async function getDashboardStats() {
     }
   } catch (error: any) {
     console.error("getDashboardStats: Error:", error)
-    throw new Error(error.message || "Failed to fetch dashboard statistics")
+    
+    // Use error handler for user-friendly messages
+    const friendlyMessage = errorHandlers.auth(error, false)
+    throw new Error(friendlyMessage)
   }
 }
 
@@ -322,6 +403,9 @@ export async function getUserRole() {
     return { success: true, data: roleInfo }
   } catch (error: any) {
     console.error("getUserRole: Error:", error)
-    throw new Error(error.message || "Failed to get user role")
+    
+    // Use error handler for user-friendly messages
+    const friendlyMessage = errorHandlers.auth(error, false)
+    throw new Error(friendlyMessage)
   }
 }

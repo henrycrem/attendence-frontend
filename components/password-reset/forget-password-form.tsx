@@ -1,9 +1,10 @@
 'use client'
-
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Mail, ArrowLeft, Check, X } from 'lucide-react'
+import { toast } from 'sonner'
 import { forgetPasswordAction } from '@/actions/auth'
+import { errorHandlers } from '@/errorHandler'
 
 const ForgetPasswordPageForm: React.FC = () => {
   const [email, setEmail] = useState('')
@@ -18,15 +19,18 @@ const ForgetPasswordPageForm: React.FC = () => {
     setSuccess('')
     setIsLoading(true)
 
+    // ✅ Basic validation with user-friendly messages
     if (!email) {
-      setError('Email is required')
+      const friendlyError = errorHandlers.passwordReset('Email is required', false)
+      setError(friendlyError)
       setIsLoading(false)
       return
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(email)) {
-      setError('Please enter a valid email address')
+      const friendlyError = errorHandlers.passwordReset('Invalid email', false)
+      setError(friendlyError)
       setIsLoading(false)
       return
     }
@@ -35,15 +39,23 @@ const ForgetPasswordPageForm: React.FC = () => {
       const result = await forgetPasswordAction(email)
       
       if (result.success) {
-        setSuccess(result.data.message)
+        // ✅ Show success message and toast
+        setSuccess('Password reset code sent to your email! Please check your inbox.')
+        toast.success('Reset code sent successfully!')
+        
         setTimeout(() => {
           router.push(`/verify-reset-password?email=${encodeURIComponent(email)}`)
         }, 2000)
       } else {
+        // ✅ Error is already user-friendly from errorHandler
         setError(result.error || 'Failed to send password reset email')
+        toast.error(result.error || 'Failed to send password reset email')
       }
     } catch (err: any) {
-      setError('An unexpected error occurred. Please try again.')
+      // ✅ Handle unexpected errors with user-friendly messages
+      const friendlyError = errorHandlers.passwordReset(err, false)
+      setError(friendlyError)
+      toast.error(friendlyError)
     } finally {
       setIsLoading(false)
     }
@@ -100,7 +112,11 @@ const ForgetPasswordPageForm: React.FC = () => {
                   name="email"
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value)
+                    // Clear error when user starts typing
+                    if (error) setError('')
+                  }}
                   className="w-full p-3 pl-10 bg-white text-gray-800 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200"
                   placeholder="Enter your email address"
                   required
@@ -132,6 +148,7 @@ const ForgetPasswordPageForm: React.FC = () => {
                 type="button"
                 onClick={() => router.push('/')}
                 className="w-full bg-white border border-gray-300 text-gray-700 font-medium py-3 px-6 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors duration-200 flex items-center justify-center"
+                disabled={isLoading}
               >
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back to Login
@@ -147,6 +164,7 @@ const ForgetPasswordPageForm: React.FC = () => {
             <button
               onClick={() => router.push('/')}
               className="text-red-600 hover:text-red-700 font-medium transition-colors duration-200"
+              disabled={isLoading}
             >
               Sign in here
             </button>

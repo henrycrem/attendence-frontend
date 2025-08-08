@@ -1,12 +1,13 @@
-"use client"
+'use client'
 import { useState, useEffect } from "react"
-import { MapPin, Clock, CheckCircle, XCircle, AlertCircle, Calendar, Wifi, WifiOff } from 'lucide-react'
+import { MapPin, Clock, CheckCircle, XCircle, Wifi, WifiOff } from 'lucide-react'
 import { checkIn, checkOut, getTodayAttendance } from "@/actions/attendence"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Alert, AlertDescription } from "@/components/ui/alert"
 import { formatTime, formatDate } from "@/lib/attendance-utils"
+import { errorHandlers, ERROR_MESSAGES } from "@/errorHandler" // Import error handlers
+import { toast } from "sonner" // Import toast
 
 interface SimpleAttendanceClockProps {
   userId: string
@@ -14,21 +15,18 @@ interface SimpleAttendanceClockProps {
   userEmail: string
 }
 
-export default function SimpleAttendanceClock({ 
-  userId, 
-  userName, 
-  userEmail 
+export default function SimpleAttendanceClock({
+  userId,
+  userName,
+  userEmail
 }: SimpleAttendanceClockProps) {
   const [attendance, setAttendance] = useState<any>(null)
-  const [checkInLoading, setCheckInLoading] = useState(false) // ✅ Separate loading states
-  const [checkOutLoading, setCheckOutLoading] = useState(false) // ✅ Separate loading states
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
+  const [checkInLoading, setCheckInLoading] = useState(false)
+  const [checkOutLoading, setCheckOutLoading] = useState(false)
   const [hasCheckedInToday, setHasCheckedInToday] = useState(false)
   const [hasCheckedOutToday, setHasCheckedOutToday] = useState(false)
   const [locationStatus, setLocationStatus] = useState<'checking' | 'good' | 'poor' | 'failed'>('checking')
   const [networkStatus, setNetworkStatus] = useState<'online' | 'offline' | 'checking'>('online')
-  const [retryCount, setRetryCount] = useState(0)
 
   // Fetch today's attendance
   useEffect(() => {
@@ -36,7 +34,7 @@ export default function SimpleAttendanceClock({
       try {
         const response = await getTodayAttendance(userId)
         setAttendance(response.data)
-        
+
         // Check what actions have been done today
         if (response.data) {
           setHasCheckedInToday(!!response.data.signInTime)
@@ -47,92 +45,22 @@ export default function SimpleAttendanceClock({
         }
       } catch (err: any) {
         console.error("Failed to fetch today's attendance:", err)
-        setError(err.message)
+        errorHandlers.network(err, true) // Use error handler with toast
       }
     }
-
     fetchTodayAttendance()
   }, [userId])
 
   // ✅ Enhanced location function with proper GPS quality check and IP fallback
-const getCurrentLocation = (): Promise<{latitude: number, longitude: number, accuracy: number, method: 'gps' | 'ip'}> => {
-  return new Promise(async (resolve, reject) => {
-    setLocationStatus('checking')
-  
-    if (!navigator.geolocation) {
-      console.log("GPS not supported, falling back to IP location")
-      setLocationStatus('failed')
-      try {
-        // Directly get IP location if GPS not supported
-        const ipLocation = await getIPLocationFallback()
-        setLocationStatus('poor')
-        resolve({
-          latitude: ipLocation.latitude,
-          longitude: ipLocation.longitude,
-          accuracy: ipLocation.accuracy,
-          method: 'ip'
-        })
-      } catch (ipError) {
-        setLocationStatus('failed')
-        reject(new Error("Location services unavailable. Please enable GPS or check your internet connection."))
-      }
-      return
-    }
+  const getCurrentLocation = (): Promise<{ latitude: number, longitude: number, accuracy: number, method: 'gps' | 'ip' }> => {
+    return new Promise(async (resolve, reject) => {
+      setLocationStatus('checking')
 
-    // Try to get GPS location first
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const accuracy = position.coords.accuracy
-        console.log("GPS Location obtained with accuracy:", accuracy)
-      
-        // ✅ Check GPS quality and decide whether to use it or fallback to IP
-        if (accuracy <= 100) {
-          setLocationStatus('good')
-          resolve({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            accuracy: accuracy,
-            method: 'gps'
-          })
-        } else if (accuracy <= 1000) {
-          setLocationStatus('poor')
-          console.log("GPS accuracy is poor but acceptable:", accuracy)
-          resolve({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            accuracy: accuracy,
-            method: 'gps'
-          })
-        } else {
-          // ✅ GPS accuracy too poor, fallback to IP
-          console.log("GPS accuracy too poor (", accuracy, "m), falling back to IP location")
-          setLocationStatus('poor')
-          try {
-            const ipLocation = await getIPLocationFallback()
-            resolve({
-              latitude: ipLocation.latitude,
-              longitude: ipLocation.longitude,
-              accuracy: ipLocation.accuracy,
-              method: 'ip'
-            })
-          } catch (ipError) {
-            console.warn("IP location failed, using poor GPS as last resort")
-            resolve({
-              latitude: position.coords.latitude,
-              longitude: position.coords.longitude,
-              accuracy: accuracy,
-              method: 'gps'
-            })
-          }
-        }
-      },
-      async (error) => {
-        console.error("GPS location failed:", error)
+      if (!navigator.geolocation) {
+        console.log("GPS not supported, falling back to IP location")
         setLocationStatus('failed')
-      
-        // ✅ GPS failed completely, fallback to IP location
-        console.log("GPS failed, attempting IP location fallback")
         try {
+          // Directly get IP location if GPS not supported
           const ipLocation = await getIPLocationFallback()
           setLocationStatus('poor')
           resolve({
@@ -141,104 +69,167 @@ const getCurrentLocation = (): Promise<{latitude: number, longitude: number, acc
             accuracy: ipLocation.accuracy,
             method: 'ip'
           })
-        } catch (ipError) {
+        } catch (ipError: any) {
+          // If IP fallback also fails
           setLocationStatus('failed')
-          let errorMessage = "Unable to determine your location. "
-          switch (error.code) {
-            case error.PERMISSION_DENIED:
-              errorMessage += "Please allow location access in your browser settings."
-              break
-            case error.POSITION_UNAVAILABLE:
-              errorMessage += "Location services are unavailable."
-              break
-            case error.TIMEOUT:
-              errorMessage += "Location request timed out."
-              break
-            default:
-              errorMessage += "Please check your GPS and internet connection."
-              break
-          }
-          reject(new Error(errorMessage))
+          reject(new Error("All IP location services failed")) // This string will be classified by errorHandler
         }
-      },
-      { 
-        enableHighAccuracy: true, // Try for best accuracy first
-        timeout: 10000, // 10 second timeout
-        maximumAge: 300000 // 5 minutes cache
+        return
       }
-    )
-  })
-}
 
-// ✅ Add IP location fallback function to frontend
-const getIPLocationFallback = async () => {
-  const services = [
-    {
-      name: 'ipapi.co',
-      url: 'https://ipapi.co/json/',
-      parser: (data: any) => ({
-        latitude: data.latitude,
-        longitude: data.longitude,
-        accuracy: 1000 // IP location is approximate
-      })
-    },
-    {
-      name: 'ip-api.com', 
-      url: 'http://ip-api.com/json/',
-      parser: (data: any) => ({
-        latitude: data.lat,
-        longitude: data.lon,
-        accuracy: 1000
-      })
-    }
-  ]
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const accuracy = position.coords.accuracy
+          console.log("GPS Location obtained with accuracy:", accuracy)
 
-  for (const service of services) {
-    try {
-      console.log(`Trying IP location service: ${service.name}`)
-      const response = await fetch(service.url, { 
-        signal: AbortSignal.timeout(5000) // 5 second timeout
-      })
-      
-      if (!response.ok) continue
-      
-      const data = await response.json()
-      const result = service.parser(data)
-      
-      // Validate the result
-      if (!result.latitude || !result.longitude || 
+          if (accuracy <= 100) {
+            setLocationStatus('good')
+            resolve({
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+              accuracy: accuracy,
+              method: 'gps'
+            })
+          } else if (accuracy <= 1000) {
+            setLocationStatus('poor')
+            console.log("GPS accuracy is poor but acceptable:", accuracy)
+            resolve({
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+              accuracy: accuracy,
+              method: 'gps'
+            })
+          } else {
+            console.log("GPS accuracy too poor (", accuracy, "m), falling back to IP location")
+            setLocationStatus('poor')
+            try {
+              const ipLocation = await getIPLocationFallback()
+              resolve({
+                latitude: ipLocation.latitude,
+                longitude: ipLocation.longitude,
+                accuracy: ipLocation.accuracy,
+                method: 'ip'
+              })
+            } catch (ipError) {
+              console.warn("IP location failed, using poor GPS as last resort")
+              resolve({ // Still resolve with poor GPS if IP fails but GPS gave something
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude,
+                accuracy: accuracy,
+                method: 'gps'
+              })
+            }
+          }
+        },
+        async (error) => { // This 'error' is a GeolocationPositionError
+          console.error("GPS location failed:", error)
+          setLocationStatus('failed')
+
+          console.log("GPS failed, attempting IP location fallback")
+          try {
+            const ipLocation = await getIPLocationFallback()
+            setLocationStatus('poor')
+            resolve({
+              latitude: ipLocation.latitude,
+              longitude: ipLocation.longitude,
+              accuracy: ipLocation.accuracy,
+              method: 'ip'
+            })
+          } catch (ipError) {
+            setLocationStatus('failed')
+            // This is the final fallback, if both GPS and IP fail.
+            // Reject with a string that classifyError can handle.
+            let rejectionMessage: string;
+            switch (error.code) {
+              case error.PERMISSION_DENIED:
+                rejectionMessage = "Geolocation permission denied";
+                break;
+              case error.POSITION_UNAVAILABLE:
+                rejectionMessage = "Geolocation position unavailable";
+                break;
+              case error.TIMEOUT:
+                rejectionMessage = "Geolocation request timed out";
+                break;
+              default:
+                rejectionMessage = "Unknown geolocation error";
+                break;
+            }
+            reject(new Error(rejectionMessage));
+          }
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 300000
+        }
+      )
+    })
+  }
+
+  // ✅ Add IP location fallback function to frontend
+  const getIPLocationFallback = async () => {
+    const services = [
+      {
+        name: 'ipapi.co',
+        url: 'https://ipapi.co/json/',
+        parser: (data: any) => ({
+          latitude: data.latitude,
+          longitude: data.longitude,
+          accuracy: 1000 // IP location is approximate
+        })
+      },
+      {
+        name: 'ip-api.com',
+        url: 'http://ip-api.com/json/',
+        parser: (data: any) => ({
+          latitude: data.lat,
+          longitude: data.lon,
+          accuracy: 1000
+        })
+      }
+    ]
+
+    for (const service of services) {
+      try {
+        console.log(`Trying IP location service: ${service.name}`)
+        const response = await fetch(service.url, {
+          signal: AbortSignal.timeout(5000) // 5 second timeout
+        })
+
+        if (!response.ok) continue
+
+        const data = await response.json()
+        const result = service.parser(data)
+
+        // Validate the result
+        if (!result.latitude || !result.longitude ||
           Math.abs(result.latitude) > 90 || Math.abs(result.longitude) > 180) {
+          continue
+        }
+
+        console.log(`Successfully got IP location from ${service.name}`)
+        return result
+      } catch (error) {
+        console.warn(`${service.name} failed:`, error)
         continue
       }
-      
-      console.log(`Successfully got IP location from ${service.name}`)
-      return result
-    } catch (error) {
-      console.warn(`${service.name} failed:`, error)
-      continue
     }
+
+    throw new Error('All IP location services failed')
   }
-  
-  throw new Error('All IP location services failed')
-}
 
   // ✅ Enhanced check-in with retry feedback
   const handleCheckIn = async () => {
     if (hasCheckedInToday) {
-      setError("You have already checked in today!")
+      toast.warning(ERROR_MESSAGES.USER_ALREADY_EXISTS) // Use toast for warning
       return
     }
-
     setCheckInLoading(true)
-    setError(null)
-    setSuccess(null)
-    setRetryCount(0)
     setNetworkStatus('checking')
-
     try {
       // Get current location
       const location = await getCurrentLocation()
-      
+
       const params = {
         userId,
         method: location.method,
@@ -246,29 +237,25 @@ const getIPLocationFallback = async () => {
         longitude: location.longitude,
         accuracy: location.accuracy
       }
-
       const result = await checkIn(params)
-      setSuccess(result.message)
+      toast.success(result.message) // Use toast for success
       setHasCheckedInToday(true)
       setNetworkStatus('online')
-      
+
       // Refresh attendance data
       setTimeout(async () => {
         const updatedAttendance = await getTodayAttendance(userId)
         setAttendance(updatedAttendance.data)
       }, 1000)
-
     } catch (err: any) {
       console.error("Check-in error:", err)
       setNetworkStatus('offline')
-      
-      // Provide more specific error messages
-      if (err.message.includes('Connection') || err.message.includes('network')) {
-        setError("Network connection failed. Please check your internet connection and try again.")
-      } else if (err.message.includes('server')) {
-        setError("Server is temporarily unavailable. Please try again in a few moments.")
+      // Use the new location error handler for location-specific errors,
+      // otherwise fallback to network handler.
+      if (err.message.includes('geolocation') || err.message.includes('location services')) {
+        errorHandlers.location(err, true)
       } else {
-        setError(err.message)
+        errorHandlers.network(err, true)
       }
     } finally {
       setCheckInLoading(false)
@@ -279,18 +266,14 @@ const getIPLocationFallback = async () => {
   // ✅ Enhanced check-out with better UX
   const handleCheckOut = async () => {
     if (hasCheckedOutToday) {
-      setError("You have already checked out today!")
+      toast.warning(ERROR_MESSAGES.USER_ALREADY_EXISTS) // Use toast for warning
       return
     }
-
     setCheckOutLoading(true) // ✅ Only set check-out loading
-    setError(null)
-    setSuccess(null)
-
     try {
       // Get current location
       const location = await getCurrentLocation()
-      
+
       const params = {
         userId,
         method: location.method,
@@ -298,20 +281,24 @@ const getIPLocationFallback = async () => {
         longitude: location.longitude,
         accuracy: location.accuracy
       }
-
       const result = await checkOut(params)
-      setSuccess(result.message)
+      toast.success(result.message) // Use toast for success
       setHasCheckedOutToday(true)
-      
+
       // Refresh attendance data
       setTimeout(async () => {
         const updatedAttendance = await getTodayAttendance(userId)
         setAttendance(updatedAttendance.data)
       }, 1000)
-
     } catch (err: any) {
       console.error("Check-out error:", err)
-      setError(err.message)
+      // Use the new location error handler for location-specific errors,
+      // otherwise fallback to network handler.
+      if (err.message.includes('geolocation') || err.message.includes('location services')) {
+        errorHandlers.location(err, true)
+      } else {
+        errorHandlers.network(err, true)
+      }
     } finally {
       setCheckOutLoading(false) // ✅ Only reset check-out loading
       setLocationStatus('checking')
@@ -381,7 +368,7 @@ const getIPLocationFallback = async () => {
         <Card className="bg-white/80 border-gray-200 backdrop-blur-sm shadow-lg">
           <CardHeader>
             <CardTitle className="text-gray-800 flex items-center">
-              <Calendar className="mr-2 text-blue-500" size={20} />
+              <Clock className="mr-2 text-blue-500" size={20} />
               Today's Status
             </CardTitle>
           </CardHeader>
@@ -405,7 +392,7 @@ const getIPLocationFallback = async () => {
                   </p>
                 )}
               </div>
-              
+
               <div className="bg-gray-50/80 rounded-lg p-4 border border-gray-200">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-gray-600">Check-out</span>
@@ -432,11 +419,11 @@ const getIPLocationFallback = async () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Button
             onClick={handleCheckIn}
-            disabled={hasCheckedInToday || checkInLoading} // ✅ Only disable for check-in loading
+            disabled={hasCheckedInToday || checkInLoading}
             size="lg"
             className="h-20 text-xl font-semibold bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white cursor-pointer"
           >
-            {checkInLoading ? ( // ✅ Only show loading for check-in
+            {checkInLoading ? (
               <div className="flex items-center space-x-2">
                 <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 <span>Clocking In...</span>
@@ -454,11 +441,11 @@ const getIPLocationFallback = async () => {
 
           <Button
             onClick={handleCheckOut}
-            disabled={hasCheckedOutToday || checkOutLoading} // ✅ Only disable for check-out loading
+            disabled={hasCheckedOutToday || checkOutLoading}
             size="lg"
             className="h-20 text-xl font-semibold bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white cursor-pointer"
           >
-            {checkOutLoading ? ( // ✅ Only show loading for check-out
+            {checkOutLoading ? (
               <div className="flex items-center space-x-2">
                 <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 <span>Clocking Out...</span>
@@ -475,30 +462,6 @@ const getIPLocationFallback = async () => {
           </Button>
         </div>
 
-        {/* Status Messages */}
-        {success && (
-          <Alert className="bg-green-100/80 border-green-300 backdrop-blur-sm">
-            <CheckCircle className="h-4 w-4 text-green-600" />
-            <AlertDescription className="text-green-700">{success}</AlertDescription>
-          </Alert>
-        )}
-
-        {error && (
-          <Alert className="bg-red-100/80 border-red-300 backdrop-blur-sm">
-            <AlertCircle className="h-4 w-4 text-red-600" />
-            <AlertDescription className="text-red-700">{error}</AlertDescription>
-          </Alert>
-        )}
-
-        {hasCheckedInToday && hasCheckedOutToday && (
-          <Alert className="bg-green-100/80 border-green-300 backdrop-blur-sm">
-            <CheckCircle className="h-4 w-4 text-green-600" />
-            <AlertDescription className="text-green-700">
-              Attendance completed for today. Great work!
-            </AlertDescription>
-          </Alert>
-        )}
-
         {/* ✅ Enhanced Location Info with Network Status */}
         <Card className="bg-white/80 border-gray-200 backdrop-blur-sm shadow-lg">
           <CardContent className="p-4">
@@ -509,7 +472,7 @@ const getIPLocationFallback = async () => {
               </div>
               {getLocationStatusIcon()}
             </div>
-            
+
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2 text-gray-600 text-sm">
                 {networkStatus === 'online' ? (
@@ -530,7 +493,7 @@ const getIPLocationFallback = async () => {
                 )}
               </div>
             </div>
-            
+
             {locationStatus === 'poor' && (
               <p className="text-xs text-orange-600 mt-2">
                 For better accuracy, try moving to an open area away from buildings.

@@ -1,7 +1,9 @@
 "use client";
 import { useState, useEffect } from "react";
-import { Clock, TrendingUp, Calendar, AlertCircle } from 'lucide-react';
+import { Clock, TrendingUp, Calendar, AlertCircle, RefreshCw, WifiOff, Shield } from 'lucide-react';
+import { toast } from 'sonner';
 import { getHourlyAttendanceFlow, getUserRole } from '@/actions/dashboard';
+import { errorHandlers } from '@/errorHandler';
 
 interface AttendanceData {
   time: string;
@@ -18,12 +20,31 @@ export default function DailyAttendanceChart() {
   const [error, setError] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [hasAccess, setHasAccess] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const [isOnline, setIsOnline] = useState(true);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsVisible(true);
     }, 500);
-    return () => clearTimeout(timer);
+
+    // ✅ Monitor online status
+    const handleOnline = () => {
+      setIsOnline(true);
+      if (error && error.includes('connection')) {
+        checkUserAccess(); // Retry when back online
+      }
+    };
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
   // ✅ Check user role first
@@ -37,9 +58,12 @@ export default function DailyAttendanceChart() {
     }
   }, [activeFilter, hasAccess]);
 
-  // ✅ Check if user has access to this component
+  // ✅ Enhanced user access check
   const checkUserAccess = async () => {
     try {
+      setLoading(true);
+      setError(null);
+      
       const roleResponse = await getUserRole();
       if (roleResponse.success) {
         const { role, isAdmin } = roleResponse.data;
@@ -47,21 +71,29 @@ export default function DailyAttendanceChart() {
         setHasAccess(isAdmin);
         
         if (!isAdmin) {
-          setError("Access denied. Admin privileges required to view attendance flow.");
+          setError("Access denied. Administrator privileges required to view attendance flow.");
         }
       }
     } catch (err: any) {
       console.error('Failed to check user role:', err);
-      setError(err.message);
+      
+      // ✅ Use error handler for user-friendly messages
+      const friendlyError = errorHandlers.auth(err, false);
+      setError(friendlyError);
+      
+      // Show appropriate toast
+      if (err.message.includes('session') || err.message.includes('log in')) {
+        toast.error('Your session has expired. Please log in again.');
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  // ✅ Use server action instead of direct API call
+  // ✅ Enhanced fetch with better error handling
   const fetchHourlyData = async () => {
     if (!hasAccess) return;
-
+    
     try {
       setLoading(true);
       setError(null);
@@ -78,41 +110,122 @@ export default function DailyAttendanceChart() {
       }
 
       const response = await getHourlyAttendanceFlow(dateParam || undefined);
-
       if (response.success) {
         setAttendanceData(response.data || []);
+        setRetryCount(0); // Reset retry count on success
+        
+        // Show success toast only after retry
+        if (retryCount > 0) {
+          toast.success('Chart data loaded successfully!');
+        }
       } else {
         throw new Error('Failed to fetch hourly data');
       }
     } catch (err: any) {
-      setError(err.message);
       console.error('Failed to fetch hourly data:', err);
+      
+      // ✅ Use error handler for user-friendly messages
+      const friendlyError = errorHandlers.auth(err, false);
+      setError(friendlyError);
+      
+      // Show appropriate toast based on error type
+      if (err.message.includes('session') || err.message.includes('log in')) {
+        toast.error('Your session has expired. Please log in again.');
+      } else if (err.message.includes('connection') || err.message.includes('network')) {
+        toast.error('Connection issue. Please check your internet.');
+      } else if (err.message.includes('Access denied')) {
+        toast.error('Access denied. Administrator privileges required.');
+      } else {
+        toast.error('Failed to load chart data. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  // ✅ Enhanced retry with exponential backoff
+  const handleRetry = async () => {
+    setRetryCount(prev => prev + 1);
+    
+    // Add delay for retries to prevent spam
+    if (retryCount > 0) {
+      const delay = Math.min(1000 * Math.pow(2, retryCount - 1), 5000); // Max 5 seconds
+      toast.info(`Retrying in ${delay / 1000} seconds...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+    
+    if (hasAccess) {
+      fetchHourlyData();
+    } else {
+      checkUserAccess();
+    }
+  };
+
   const maxValue = Math.max(...attendanceData.map(d => Math.max(d.clockIns, d.clockOuts)), 1);
 
-  // ✅ Show access denied message for non-admin users
-  if (!loading && !hasAccess) {
+  // ✅ Enhanced access denied message
+  if (!loading && !hasAccess && error) {
     return (
       <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
         <div className="text-center">
-          <AlertCircle className="mx-auto h-12 w-12 text-red-500 mb-4" />
-          <h3 className="text-lg font-semibold text-gray-800 mb-2">Access Denied</h3>
-          <p className="text-gray-600 mb-4">
-            You need administrator privileges to view attendance flow charts.
+          <div className="flex justify-center mb-4">
+            {!isOnline ? (
+              <WifiOff className="h-12 w-12 text-gray-400" />
+            ) : error.includes('Access denied') ? (
+              <Shield className="h-12 w-12 text-red-500" />
+            ) : (
+              <AlertCircle className="h-12 w-12 text-orange-500" />
+            )}
+          </div>
+          
+          <h3 className="text-lg font-semibold text-gray-800 mb-2">
+            {!isOnline ? 'No Internet Connection' : 
+             error.includes('Access denied') ? 'Access Denied' : 
+             'Unable to Load Chart'}
+          </h3>
+          
+          <p className="text-gray-600 mb-4 max-w-md mx-auto">
+            {error}
           </p>
-          <p className="text-sm text-gray-500">
-            Current role: <span className="font-medium">{userRole || 'Unknown'}</span>
-          </p>
+          
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <button 
+              onClick={handleRetry}
+              disabled={loading || !isOnline}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              <span>{loading ? 'Retrying...' : 'Try Again'}</span>
+            </button>
+            
+            {error.includes('session') && (
+              <button 
+                onClick={() => window.location.href = '/'}
+                className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+              >
+                Go to Login
+              </button>
+            )}
+          </div>
+          
+          {userRole && (
+            <p className="text-sm text-gray-500 mt-4">
+              Current role: <span className="font-medium">{userRole}</span>
+            </p>
+          )}
+          
+          {retryCount > 0 && (
+            <p className="text-sm text-gray-500 mt-2">
+              Retry attempt: {retryCount}
+            </p>
+          )}
         </div>
       </div>
     );
   }
 
-  if (loading) {
+  // ✅ Enhanced loading state
+  if (loading && attendanceData.length === 0) {
     return (
       <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
         <div className="animate-pulse">
@@ -127,17 +240,52 @@ export default function DailyAttendanceChart() {
     );
   }
 
-  if (error) {
+  // ✅ Enhanced error state
+  if (error && attendanceData.length === 0) {
     return (
       <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-red-600">Error loading chart data: {error}</p>
-          <button 
-            onClick={fetchHourlyData}
-            className="mt-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-          >
-            Retry
-          </button>
+        <div className="text-center">
+          <div className="flex justify-center mb-4">
+            {!isOnline ? (
+              <WifiOff className="h-12 w-12 text-gray-400" />
+            ) : (
+              <RefreshCw className="h-12 w-12 text-orange-500" />
+            )}
+          </div>
+          
+          <h3 className="text-lg font-semibold text-gray-800 mb-2">
+            {!isOnline ? 'No Internet Connection' : 'Unable to Load Chart Data'}
+          </h3>
+          
+          <p className="text-gray-600 mb-6 max-w-md mx-auto">
+            {error}
+          </p>
+          
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <button 
+              onClick={handleRetry}
+              disabled={loading || !isOnline}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              <span>{loading ? 'Retrying...' : 'Try Again'}</span>
+            </button>
+            
+            {error.includes('session') && (
+              <button 
+                onClick={() => window.location.href = '/'}
+                className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+              >
+                Go to Login
+              </button>
+            )}
+          </div>
+          
+          {retryCount > 0 && (
+            <p className="text-sm text-gray-500 mt-4">
+              Retry attempt: {retryCount}
+            </p>
+          )}
         </div>
       </div>
     );
@@ -151,6 +299,14 @@ export default function DailyAttendanceChart() {
     <div className={`bg-white/95 backdrop-blur-sm rounded-xl shadow-sm border border-gray-200 p-6 mb-6 transition-all duration-700 ${
       isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
     }`}>
+      {/* Connection Status Indicator */}
+      {!isOnline && (
+        <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg flex items-center space-x-2">
+          <WifiOff className="w-4 h-4 text-orange-600" />
+          <span className="text-sm text-orange-700">You're currently offline</span>
+        </div>
+      )}
+      
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center space-x-3">
@@ -168,11 +324,21 @@ export default function DailyAttendanceChart() {
             className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             value={activeFilter}
             onChange={(e) => setActiveFilter(e.target.value)}
+            disabled={loading}
           >
             <option>Today</option>
             <option>Yesterday</option>
             <option>This Week</option>
           </select>
+          
+          <button
+            onClick={fetchHourlyData}
+            disabled={loading || !isOnline}
+            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+            title="Refresh chart"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
         </div>
       </div>
 
@@ -231,7 +397,7 @@ export default function DailyAttendanceChart() {
             </div>
           ))}
         </div>
-
+        
         {/* Y-axis labels */}
         <div className="absolute left-0 top-0 h-64 flex flex-col justify-between text-xs text-gray-500 pr-2">
           <span>{maxValue}</span>

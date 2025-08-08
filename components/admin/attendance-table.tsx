@@ -1,7 +1,9 @@
 "use client"
 import { useState, useEffect } from 'react';
-import { Search, Filter, Download, Eye, Clock, RefreshCw, AlertCircle } from 'lucide-react';
+import { Search, Filter, Download, Eye, Clock, RefreshCw, AlertCircle, WifiOff, Shield } from 'lucide-react';
+import { toast } from 'sonner';
 import { getTodayAttendanceRecords, exportAttendanceData, getUserRole } from '@/actions/dashboard';
+import { errorHandlers } from '@/errorHandler';
 
 interface AttendanceRecord {
   id: string;
@@ -37,11 +39,30 @@ export default function AttendanceTable() {
   const [exporting, setExporting] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [hasAccess, setHasAccess] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const [isOnline, setIsOnline] = useState(true);
 
   useEffect(() => {
     setTimeout(() => {
       setIsVisible(true);
     }, 100);
+
+    // ✅ Monitor online status
+    const handleOnline = () => {
+      setIsOnline(true);
+      if (error && error.includes('connection')) {
+        checkUserAccess(); // Retry when back online
+      }
+    };
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
   // ✅ Check user role first
@@ -55,9 +76,12 @@ export default function AttendanceTable() {
     }
   }, [currentPage, searchTerm, filterStatus, hasAccess]);
 
-  // ✅ Check if user has access to this component
+  // ✅ Enhanced user access check
   const checkUserAccess = async () => {
     try {
+      setLoading(true);
+      setError(null);
+      
       const roleResponse = await getUserRole();
       if (roleResponse.success) {
         const { role, isAdmin } = roleResponse.data;
@@ -65,21 +89,29 @@ export default function AttendanceTable() {
         setHasAccess(isAdmin);
         
         if (!isAdmin) {
-          setError("Access denied. Admin privileges required to view attendance records.");
+          setError("Access denied. Administrator privileges required to view attendance records.");
         }
       }
     } catch (err: any) {
       console.error('Failed to check user role:', err);
-      setError(err.message);
+      
+      // ✅ Use error handler for user-friendly messages
+      const friendlyError = errorHandlers.auth(err, false);
+      setError(friendlyError);
+      
+      // Show appropriate toast
+      if (err.message.includes('session') || err.message.includes('log in')) {
+        toast.error('Your session has expired. Please log in again.');
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  // ✅ Use server action instead of direct API call
+  // ✅ Enhanced fetch with better error handling
   const fetchAttendanceRecords = async () => {
     if (!hasAccess) return;
-
+    
     try {
       setLoading(true);
       setError(null);
@@ -90,16 +122,36 @@ export default function AttendanceTable() {
         search: searchTerm,
         status: filterStatus
       });
-
+      
       if (response.success) {
         setRecords(response.data.records || []);
         setPagination(response.data.pagination || null);
+        setRetryCount(0); // Reset retry count on success
+        
+        // Show success toast only after retry
+        if (retryCount > 0) {
+          toast.success('Attendance records loaded successfully!');
+        }
       } else {
         throw new Error('Failed to fetch attendance records');
       }
     } catch (err: any) {
-      setError(err.message);
       console.error('Failed to fetch attendance records:', err);
+      
+      // ✅ Use error handler for user-friendly messages
+      const friendlyError = errorHandlers.auth(err, false);
+      setError(friendlyError);
+      
+      // Show appropriate toast based on error type
+      if (err.message.includes('session') || err.message.includes('log in')) {
+        toast.error('Your session has expired. Please log in again.');
+      } else if (err.message.includes('connection') || err.message.includes('network')) {
+        toast.error('Connection issue. Please check your internet.');
+      } else if (err.message.includes('Access denied')) {
+        toast.error('Access denied. Administrator privileges required.');
+      } else {
+        toast.error('Failed to load attendance records. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -115,10 +167,10 @@ export default function AttendanceTable() {
     return styles[status as keyof typeof styles] || 'bg-gray-100 text-gray-800';
   };
 
-  // ✅ Use server action for export
+  // ✅ Enhanced export with better error handling
   const handleExport = async () => {
     if (!hasAccess) return;
-
+    
     try {
       setExporting(true);
       
@@ -127,7 +179,7 @@ export default function AttendanceTable() {
         search: searchTerm,
         status: filterStatus
       });
-
+      
       if (response.success && response.blob) {
         // Create download link
         const url = window.URL.createObjectURL(response.blob);
@@ -138,35 +190,103 @@ export default function AttendanceTable() {
         a.click();
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
+        
+        toast.success('Attendance data exported successfully!');
       } else {
         throw new Error('Export failed');
       }
     } catch (err: any) {
       console.error('Export failed:', err);
-      setError(err.message);
+      
+      // ✅ Use error handler for user-friendly messages
+      const friendlyError = errorHandlers.auth(err, false);
+      setError(friendlyError);
+      toast.error(friendlyError);
     } finally {
       setExporting(false);
     }
   };
 
-  // ✅ Show access denied message for non-admin users
-  if (!loading && !hasAccess) {
+  // ✅ Enhanced retry with exponential backoff
+  const handleRetry = async () => {
+    setRetryCount(prev => prev + 1);
+    
+    // Add delay for retries to prevent spam
+    if (retryCount > 0) {
+      const delay = Math.min(1000 * Math.pow(2, retryCount - 1), 5000); // Max 5 seconds
+      toast.info(`Retrying in ${delay / 1000} seconds...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+    
+    if (hasAccess) {
+      fetchAttendanceRecords();
+    } else {
+      checkUserAccess();
+    }
+  };
+
+  // ✅ Enhanced access denied message
+  if (!loading && !hasAccess && error) {
     return (
       <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-sm border border-gray-200 p-6">
         <div className="text-center">
-          <AlertCircle className="mx-auto h-12 w-12 text-red-500 mb-4" />
-          <h3 className="text-lg font-semibold text-gray-800 mb-2">Access Denied</h3>
-          <p className="text-gray-600 mb-4">
-            You need administrator privileges to view attendance records.
+          <div className="flex justify-center mb-4">
+            {!isOnline ? (
+              <WifiOff className="h-12 w-12 text-gray-400" />
+            ) : error.includes('Access denied') ? (
+              <Shield className="h-12 w-12 text-red-500" />
+            ) : (
+              <AlertCircle className="h-12 w-12 text-orange-500" />
+            )}
+          </div>
+          
+          <h3 className="text-lg font-semibold text-gray-800 mb-2">
+            {!isOnline ? 'No Internet Connection' : 
+             error.includes('Access denied') ? 'Access Denied' : 
+             'Unable to Load Data'}
+          </h3>
+          
+          <p className="text-gray-600 mb-4 max-w-md mx-auto">
+            {error}
           </p>
-          <p className="text-sm text-gray-500">
-            Current role: <span className="font-medium">{userRole || 'Unknown'}</span>
-          </p>
+          
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <button 
+              onClick={handleRetry}
+              disabled={loading || !isOnline}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              <span>{loading ? 'Retrying...' : 'Try Again'}</span>
+            </button>
+            
+            {error.includes('session') && (
+              <button 
+                onClick={() => window.location.href = '/'}
+                className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+              >
+                Go to Login
+              </button>
+            )}
+          </div>
+          
+          {userRole && (
+            <p className="text-sm text-gray-500 mt-4">
+              Current role: <span className="font-medium">{userRole}</span>
+            </p>
+          )}
+          
+          {retryCount > 0 && (
+            <p className="text-sm text-gray-500 mt-2">
+              Retry attempt: {retryCount}
+            </p>
+          )}
         </div>
       </div>
     );
   }
 
+  // ✅ Enhanced loading state
   if (loading && records.length === 0) {
     return (
       <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-sm border border-gray-200">
@@ -191,6 +311,14 @@ export default function AttendanceTable() {
     <div className={`bg-white/95 backdrop-blur-sm rounded-xl shadow-sm border border-gray-200 transition-all duration-700 ${
       isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
     }`}>
+      {/* Connection Status Indicator */}
+      {!isOnline && (
+        <div className="p-4 bg-orange-50 border-b border-orange-200 flex items-center space-x-2">
+          <WifiOff className="w-4 h-4 text-orange-600" />
+          <span className="text-sm text-orange-700">You're currently offline</span>
+        </div>
+      )}
+      
       {/* Header */}
       <div className="p-6 border-b border-gray-100">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -218,6 +346,7 @@ export default function AttendanceTable() {
                   setCurrentPage(1);
                 }}
                 className="w-full sm:w-64 px-4 py-2 pl-10 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={loading}
               />
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             </div>
@@ -230,6 +359,7 @@ export default function AttendanceTable() {
                 setCurrentPage(1);
               }}
               className="px-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+              disabled={loading}
             >
               <option value="All">All Status</option>
               <option value="On Time">On Time</option>
@@ -241,7 +371,7 @@ export default function AttendanceTable() {
             {/* Refresh */}
             <button 
               onClick={fetchAttendanceRecords}
-              disabled={loading}
+              disabled={loading || !isOnline}
               className="px-4 py-2 text-sm font-medium bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors duration-200 flex items-center space-x-2 disabled:opacity-50"
             >
               <RefreshCw className={`${loading ? 'animate-spin' : ''}`} size={16} />
@@ -251,7 +381,7 @@ export default function AttendanceTable() {
             {/* Export */}
             <button 
               onClick={handleExport}
-              disabled={exporting}
+              disabled={exporting || !isOnline}
               className="px-4 py-2 text-sm font-medium bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors duration-200 flex items-center space-x-2 disabled:opacity-50"
             >
               <Download className={`${exporting ? 'animate-spin' : ''}`} size={16} />
@@ -262,15 +392,19 @@ export default function AttendanceTable() {
       </div>
 
       {/* Error State */}
-      {error && (
+      {error && records.length === 0 && (
         <div className="p-6 bg-red-50 border-b border-red-200">
-          <p className="text-red-600">Error: {error}</p>
-          <button 
-            onClick={fetchAttendanceRecords}
-            className="mt-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-          >
-            Retry
-          </button>
+          <div className="flex items-center justify-between">
+            <p className="text-red-600">{error}</p>
+            <button 
+              onClick={handleRetry}
+              disabled={loading}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center space-x-2"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              <span>{loading ? 'Retrying...' : 'Retry'}</span>
+            </button>
+          </div>
         </div>
       )}
 
@@ -325,8 +459,22 @@ export default function AttendanceTable() {
         </table>
       </div>
       
+      {/* Empty State */}
+      {records.length === 0 && !loading && !error && (
+        <div className="p-12 text-center">
+          <Clock className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No attendance records found</h3>
+          <p className="text-gray-500">
+            {searchTerm || filterStatus !== 'All' 
+              ? 'Try adjusting your search or filters.'
+              : 'Attendance records will appear here as employees clock in.'
+            }
+          </p>
+        </div>
+      )}
+      
       {/* Pagination */}
-      {pagination && (
+      {pagination && pagination.totalRecords > 0 && (
         <div className="p-6 border-t border-gray-100 flex flex-col sm:flex-row justify-between items-center gap-4">
           <div className="text-sm text-gray-600">
             Showing <span className="font-medium">{((currentPage - 1) * 10) + 1}</span> to{' '}

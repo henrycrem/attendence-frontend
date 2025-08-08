@@ -1,9 +1,10 @@
 'use client'
-
 import React, { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Lock, Eye, EyeOff, Check, X, ArrowLeft } from 'lucide-react'
+import { toast } from 'sonner'
 import { resetPasswordAction } from '@/actions/auth'
+import { errorHandlers } from '@/errorHandler' 
 
 const ResetPasswordPageForm: React.FC = () => {
   const [password, setPassword] = useState('')
@@ -25,14 +26,15 @@ const ResetPasswordPageForm: React.FC = () => {
     if (emailParam) {
       setEmail(emailParam)
     } else {
-      setError('Invalid request. Please start the password reset process again.')
+      const friendlyError = errorHandlers.passwordReset('Invalid request. Please start the password reset process again.', false)
+      setError(friendlyError)
     }
   }, [searchParams])
 
   useEffect(() => {
     if (password) {
       let strength = 0
-      if (password.length >= 6) strength += 1
+      if (password.length >= 8) strength += 1 // Changed from 6 to 8 to match backend validation
       if (password.match(/[A-Z]/)) strength += 1
       if (password.match(/[0-9]/)) strength += 1
       if (password.match(/[^A-Za-z0-9]/)) strength += 1
@@ -72,38 +74,45 @@ const ResetPasswordPageForm: React.FC = () => {
     setSuccess('')
     setIsLoading(true)
 
+    // ✅ Validation with user-friendly messages
     if (!email) {
-      setError('Invalid request. Please start the password reset process again.')
+      const friendlyError = errorHandlers.passwordReset('Invalid request. Please start the password reset process again.', false)
+      setError(friendlyError)
       setIsLoading(false)
       return
     }
 
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters long')
+    if (password.length < 8) { // Updated to match backend validation
+      const friendlyError = errorHandlers.passwordReset('Password must be at least 8 characters long', false)
+      setError(friendlyError)
       setIsLoading(false)
       return
     }
 
     if (!/[A-Z]/.test(password)) {
-      setError('Password must contain at least one uppercase letter')
+      const friendlyError = errorHandlers.passwordReset('Password must contain at least one uppercase letter', false)
+      setError(friendlyError)
       setIsLoading(false)
       return
     }
 
     if (!/[0-9]/.test(password)) {
-      setError('Password must contain at least one number')
+      const friendlyError = errorHandlers.passwordReset('Password must contain at least one number', false)
+      setError(friendlyError)
       setIsLoading(false)
       return
     }
 
     if (!/[^A-Za-z0-9]/.test(password)) {
-      setError('Password must contain at least one special character')
+      const friendlyError = errorHandlers.passwordReset('Password must contain at least one special character', false)
+      setError(friendlyError)
       setIsLoading(false)
       return
     }
 
     if (password !== confirmPassword) {
-      setError('Passwords do not match')
+      const friendlyError = errorHandlers.passwordReset('Passwords do not match', false)
+      setError(friendlyError)
       setIsLoading(false)
       return
     }
@@ -112,15 +121,22 @@ const ResetPasswordPageForm: React.FC = () => {
       const result = await resetPasswordAction(email, password)
       
       if (result.success) {
-        setSuccess(result.data.message)
+        setSuccess('Password reset successful! Redirecting to login...')
+        toast.success('Password reset successfully! You can now log in.')
+        
         setTimeout(() => {
           router.push('/')
         }, 3000)
       } else {
+        // ✅ Error is already user-friendly from errorHandler
         setError(result.error || 'Failed to reset password')
+        toast.error(result.error || 'Failed to reset password')
       }
     } catch (err: any) {
-      setError('An unexpected error occurred. Please try again.')
+      // ✅ Handle unexpected errors with user-friendly messages
+      const friendlyError = errorHandlers.passwordReset(err, false)
+      setError(friendlyError)
+      toast.error(friendlyError)
     } finally {
       setIsLoading(false)
     }
@@ -185,7 +201,11 @@ const ResetPasswordPageForm: React.FC = () => {
                   name="password"
                   type={isPasswordVisible ? 'text' : 'password'}
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    setPassword(e.target.value)
+                    // Clear error when user starts typing
+                    if (error) setError('')
+                  }}
                   className="w-full p-3 pr-10 bg-white text-gray-800 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200"
                   placeholder="Enter your new password"
                   required
@@ -195,6 +215,7 @@ const ResetPasswordPageForm: React.FC = () => {
                   type="button"
                   className="absolute inset-y-0 right-0 flex items-center pr-3"
                   onClick={() => setIsPasswordVisible(!isPasswordVisible)}
+                  disabled={isLoading}
                 >
                   {isPasswordVisible ? (
                     <EyeOff className="w-5 h-5 text-gray-400 hover:text-red-500 transition-colors" />
@@ -211,7 +232,7 @@ const ResetPasswordPageForm: React.FC = () => {
                     <span className="text-xs text-gray-600">Password Strength</span>
                     <span className={`text-xs font-medium ${
                       passwordStrength < 2 ? 'text-red-600' :
-                       passwordStrength < 4 ? 'text-yellow-600' : 'text-green-600'
+                      passwordStrength < 4 ? 'text-yellow-600' : 'text-green-600'
                     }`}>
                       {getPasswordStrengthText()}
                     </span>
@@ -227,9 +248,9 @@ const ResetPasswordPageForm: React.FC = () => {
                   
                   {/* Password Requirements */}
                   <div className="mt-3 space-y-1">
-                    <div className={`flex items-center text-xs ${password.length >= 6 ? 'text-green-600' : 'text-red-600'}`}>
-                      <Check className={`w-3 h-3 mr-2 ${password.length >= 6 ? 'text-green-600' : 'text-red-600'}`} />
-                      At least 6 characters
+                    <div className={`flex items-center text-xs ${password.length >= 8 ? 'text-green-600' : 'text-red-600'}`}>
+                      <Check className={`w-3 h-3 mr-2 ${password.length >= 8 ? 'text-green-600' : 'text-red-600'}`} />
+                      At least 8 characters
                     </div>
                     <div className={`flex items-center text-xs ${/[A-Z]/.test(password) ? 'text-green-600' : 'text-red-600'}`}>
                       <Check className={`w-3 h-3 mr-2 ${/[A-Z]/.test(password) ? 'text-green-600' : 'text-red-600'}`} />
@@ -259,7 +280,11 @@ const ResetPasswordPageForm: React.FC = () => {
                   name="confirmPassword"
                   type={isConfirmPasswordVisible ? 'text' : 'password'}
                   value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  onChange={(e) => {
+                    setConfirmPassword(e.target.value)
+                    // Clear error when user starts typing
+                    if (error) setError('')
+                  }}
                   className={`w-full p-3 pr-10 bg-white text-gray-800 border rounded-md focus:outline-none focus:ring-2 transition-colors duration-200 ${
                     confirmPasswordError ? 'border-red-300 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-red-500 focus:border-red-500'
                   }`}
@@ -271,6 +296,7 @@ const ResetPasswordPageForm: React.FC = () => {
                   type="button"
                   className="absolute inset-y-0 right-0 flex items-center pr-3"
                   onClick={() => setIsConfirmPasswordVisible(!isConfirmPasswordVisible)}
+                  disabled={isLoading}
                 >
                   {isConfirmPasswordVisible ? (
                     <EyeOff className="w-5 h-5 text-gray-400 hover:text-red-500 transition-colors" />
@@ -318,7 +344,8 @@ const ResetPasswordPageForm: React.FC = () => {
               <button
                 type="button"
                 onClick={() => router.push('/verify-reset-password')}
-                className="w-full bg-white border border-gray-300 text-gray-700 font-medium py-3 px-6 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors duration-200 flex items-center justify-center"
+                disabled={isLoading}
+                className="w-full bg-white border border-gray-300 text-gray-700 font-medium py-3 px-6 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors duration-200 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back to Verification

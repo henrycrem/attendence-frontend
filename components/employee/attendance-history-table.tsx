@@ -1,9 +1,9 @@
-// components/employee/AttendanceHistoryClient.tsx
 "use client"
-
 import { useState, useEffect } from 'react'
-import { Calendar, Clock, MapPin, RefreshCw } from 'lucide-react'
-import { getEmployeeAttendanceHistory } from '@/actions/dashboard' 
+import { Calendar, Clock, MapPin, RefreshCw, AlertCircle, WifiOff } from 'lucide-react'
+import { toast } from 'sonner'
+import { getEmployeeAttendanceHistory } from '@/actions/dashboard'
+import { errorHandlers } from '@/errorHandler'
 
 interface AttendanceRecord {
   id: string
@@ -43,17 +43,60 @@ export default function AttendanceHistoryClient({
   const [currentPage, setCurrentPage] = useState(initialData?.pagination?.currentPage || 1)
   const [selectedMonth, setSelectedMonth] = useState('')
   const [selectedYear, setSelectedYear] = useState('')
+  const [retryCount, setRetryCount] = useState(0)
+  const [isOnline, setIsOnline] = useState(true)
+
+  useEffect(() => {
+    // ✅ Monitor online status
+    const handleOnline = () => {
+      setIsOnline(true);
+      if (error && error.includes('connection')) {
+        fetchFromServerAction(currentPage, selectedMonth, selectedYear); // Retry when back online
+      }
+    };
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   const fetchFromServerAction = async (page: number, month?: string, year?: string) => {
     setLoading(true)
     setError(null)
+    
     try {
       const result = await getEmployeeAttendanceHistory({ page, month, year })
       setRecords(result.data.records)
       setPagination(result.data.pagination)
       setCurrentPage(page)
+      setRetryCount(0) // Reset retry count on success
+      
+      // Show success toast only after retry
+      if (retryCount > 0) {
+        toast.success('Attendance history loaded successfully!');
+      }
     } catch (err: any) {
-      setError(err.message)
+      console.error('Failed to fetch attendance history:', err);
+      
+      // ✅ Use error handler for user-friendly messages
+      const friendlyError = errorHandlers.auth(err, false);
+      setError(friendlyError);
+      
+      // Show appropriate toast based on error type
+      if (err.message.includes('session') || err.message.includes('log in')) {
+        toast.error('Your session has expired. Please log in again.');
+      } else if (err.message.includes('connection') || err.message.includes('network')) {
+        toast.error('Connection issue. Please check your internet.');
+      } else if (err.message.includes('Access denied')) {
+        toast.error('Access denied. Employee privileges required.');
+      } else {
+        toast.error('Failed to load attendance history. Please try again.');
+      }
     } finally {
       setLoading(false)
     }
@@ -64,9 +107,19 @@ export default function AttendanceHistoryClient({
     fetchFromServerAction(1, selectedMonth, selectedYear)
   }, [selectedMonth, selectedYear])
 
-  const handleRefresh = () => {
-    fetchFromServerAction(currentPage, selectedMonth, selectedYear)
-  }
+  // ✅ Enhanced retry with exponential backoff
+  const handleRetry = async () => {
+    setRetryCount(prev => prev + 1);
+    
+    // Add delay for retries to prevent spam
+    if (retryCount > 0) {
+      const delay = Math.min(1000 * Math.pow(2, retryCount - 1), 5000); // Max 5 seconds
+      toast.info(`Retrying in ${delay / 1000} seconds...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+    
+    fetchFromServerAction(currentPage, selectedMonth, selectedYear);
+  };
 
   const handlePageChange = (page: number) => {
     fetchFromServerAction(page, selectedMonth, selectedYear)
@@ -108,6 +161,7 @@ export default function AttendanceHistoryClient({
     { value: '12', label: 'December' },
   ]
 
+  // ✅ Enhanced loading state
   if (loading && records.length === 0) {
     return (
       <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-sm border border-gray-200">
@@ -130,6 +184,14 @@ export default function AttendanceHistoryClient({
 
   return (
     <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-sm border border-gray-200">
+      {/* Connection Status Indicator */}
+      {!isOnline && (
+        <div className="p-4 bg-orange-50 border-b border-orange-200 flex items-center space-x-2">
+          <WifiOff className="w-4 h-4 text-orange-600" />
+          <span className="text-sm text-orange-700">You're currently offline</span>
+        </div>
+      )}
+      
       {/* Header */}
       <div className="p-6 border-b border-gray-100">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -149,6 +211,7 @@ export default function AttendanceHistoryClient({
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(e.target.value)}
               className="px-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              disabled={loading}
             >
               <option value="">All Months</option>
               {months.map((month) => (
@@ -161,6 +224,7 @@ export default function AttendanceHistoryClient({
               value={selectedYear}
               onChange={(e) => setSelectedYear(e.target.value)}
               className="px-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              disabled={loading}
             >
               <option value="">All Years</option>
               {years.map((year) => (
@@ -170,8 +234,8 @@ export default function AttendanceHistoryClient({
               ))}
             </select>
             <button
-              onClick={handleRefresh}
-              disabled={loading}
+              onClick={handleRetry}
+              disabled={loading || !isOnline}
               className="px-4 py-2 text-sm font-medium bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center space-x-2 disabled:opacity-50"
             >
               <RefreshCw className={loading ? 'animate-spin' : ''} size={16} />
@@ -184,7 +248,23 @@ export default function AttendanceHistoryClient({
       {/* Error */}
       {error && (
         <div className="p-6 bg-red-50 border-b border-red-200">
-          <p className="text-red-600">Error: {error}</p>
+          <div className="flex items-center justify-between">
+            <p className="text-red-600">{error}</p>
+            <button 
+              onClick={handleRetry}
+              disabled={loading}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center space-x-2"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              <span>{loading ? 'Retrying...' : 'Retry'}</span>
+            </button>
+          </div>
+          
+          {retryCount > 0 && (
+            <p className="text-sm text-red-500 mt-2">
+              Retry attempt: {retryCount}
+            </p>
+          )}
         </div>
       )}
 

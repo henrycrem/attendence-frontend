@@ -1,9 +1,10 @@
 'use client'
-
 import React, { useState, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Shield, ArrowLeft, Check, X } from 'lucide-react'
-import { verifyResetPasswordOtpAction } from '@/actions/auth'
+import { toast } from 'sonner'
+import { verifyResetPasswordOtpAction, forgetPasswordAction } from '@/actions/auth'
+import { errorHandlers } from '@/errorHandler' 
 
 const VerifyResetPasswordForm: React.FC = () => {
   const [otp, setOtp] = useState(['', '', '', '', ''])
@@ -11,6 +12,7 @@ const VerifyResetPasswordForm: React.FC = () => {
   const [success, setSuccess] = useState('')
   const [email, setEmail] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [isResending, setIsResending] = useState(false)
   
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -21,9 +23,10 @@ const VerifyResetPasswordForm: React.FC = () => {
     if (emailParam) {
       setEmail(emailParam)
     } else {
-      setError('Invalid request. Please start the password reset process again.')
+      const friendlyError = errorHandlers.otp('Invalid request. Please start the password reset process again.', false)
+      setError(friendlyError)
     }
-
+    
     // Auto-focus first input
     if (inputRefs.current[0]) {
       inputRefs.current[0].focus()
@@ -77,8 +80,11 @@ const VerifyResetPasswordForm: React.FC = () => {
     setIsLoading(true)
 
     const otpCode = otp.join('')
+    
+    // ✅ Validation with user-friendly messages
     if (otpCode.length !== 5) {
-      setError('Please enter a 5-digit OTP')
+      const friendlyError = errorHandlers.otp('Please enter the complete 5-digit verification code', false)
+      setError(friendlyError)
       setIsLoading(false)
       return
     }
@@ -87,39 +93,67 @@ const VerifyResetPasswordForm: React.FC = () => {
       const result = await verifyResetPasswordOtpAction(email, otpCode)
       
       if (result.success) {
-        setSuccess(result.data.message)
+        setSuccess('Verification successful! Redirecting to password reset...')
+        toast.success('Code verified successfully!')
+        
         setTimeout(() => {
-          if (result.data.redirect) {
+          if (result.data?.redirect) {
             router.push(result.data.redirect)
           } else {
             router.push(`/reset-password?email=${encodeURIComponent(email)}`)
           }
         }, 2000)
       } else {
-        setError(result.error || 'Failed to verify OTP')
+        // ✅ Error is already user-friendly from errorHandler
+        setError(result.error || 'Failed to verify code')
+        toast.error(result.error || 'Failed to verify code')
       }
     } catch (err: any) {
-      setError('An unexpected error occurred. Please try again.')
+      // ✅ Handle unexpected errors with user-friendly messages
+      const friendlyError = errorHandlers.otp(err, false)
+      setError(friendlyError)
+      toast.error(friendlyError)
     } finally {
       setIsLoading(false)
     }
   }
 
   const handleResendOtp = async () => {
+    if (!email) {
+      const friendlyError = errorHandlers.otp('Email is required to resend code', false)
+      setError(friendlyError)
+      return
+    }
+
+    setIsResending(true)
+    setError('')
+    setSuccess('')
+
     try {
-      setError('')
-      // Import the forget password action to resend OTP
-      const { forgetPasswordAction } = await import('@/actions/auth')
       const result = await forgetPasswordAction(email)
       
       if (result.success) {
-        setSuccess('OTP resent successfully!')
+        setSuccess('New verification code sent to your email!')
+        toast.success('Code resent successfully!')
+        // Clear the OTP inputs
+        setOtp(['', '', '', '', ''])
+        // Focus first input
+        if (inputRefs.current[0]) {
+          inputRefs.current[0].focus()
+        }
         setTimeout(() => setSuccess(''), 3000)
       } else {
-        setError(result.error || 'Failed to resend OTP')
+        // ✅ Error is already user-friendly from errorHandler
+        setError(result.error || 'Failed to resend code')
+        toast.error(result.error || 'Failed to resend code')
       }
     } catch (err: any) {
-      setError('Failed to resend OTP')
+      // ✅ Handle unexpected errors with user-friendly messages
+      const friendlyError = errorHandlers.otp(err, false)
+      setError(friendlyError)
+      toast.error(friendlyError)
+    } finally {
+      setIsResending(false)
     }
   }
 
@@ -180,6 +214,7 @@ const VerifyResetPasswordForm: React.FC = () => {
                   ref={(el) => (inputRefs.current[index] = el)}
                   className="w-12 h-14 text-center text-xl font-semibold bg-white border-2 border-gray-300 rounded-md text-gray-800 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200 hover:border-gray-400"
                   required
+                  disabled={isLoading}
                 />
               ))}
             </div>
@@ -188,7 +223,7 @@ const VerifyResetPasswordForm: React.FC = () => {
             <div className="space-y-4">
               <button
                 type="submit"
-                disabled={isLoading}
+                disabled={isLoading || otp.some(digit => !digit)}
                 className="w-full bg-red-600 text-white font-semibold py-3 px-6 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoading ? (
@@ -205,16 +240,25 @@ const VerifyResetPasswordForm: React.FC = () => {
               <button
                 type="button"
                 onClick={handleResendOtp}
-                className="w-full bg-white border border-gray-300 text-gray-700 font-medium py-3 px-6 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors duration-200"
+                disabled={isResending || isLoading}
+                className="w-full bg-white border border-gray-300 text-gray-700 font-medium py-3 px-6 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Didn't receive the code? Resend OTP
+                {isResending ? (
+                  <div className="flex items-center justify-center">
+                    <div className="w-4 h-4 border-2 border-gray-400/30 border-t-gray-400 rounded-full animate-spin mr-2"></div>
+                    Resending...
+                  </div>
+                ) : (
+                  "Didn't receive the code? Resend OTP"
+                )}
               </button>
 
               {/* Back button */}
               <button
                 type="button"
                 onClick={() => router.push('/forget-password')}
-                className="w-full bg-white border border-gray-300 text-gray-700 font-medium py-3 px-6 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors duration-200 flex items-center justify-center"
+                disabled={isLoading || isResending}
+                className="w-full bg-white border border-gray-300 text-gray-700 font-medium py-3 px-6 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors duration-200 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back to Email Entry
