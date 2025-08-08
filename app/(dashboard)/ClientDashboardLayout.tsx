@@ -6,8 +6,6 @@ import { useRouter } from "next/navigation"
 import { useAuth } from "../../contexts/AuthContext"
 import TopBar from "../../shared/widgets/dashboard/topbar"
 import Sidebar from "../../shared/widgets/dashboard/sidebar"
-import { PermissionProvider } from "../../hooks/permissions"
-
 
 interface ClientDashboardLayoutProps {
   children: React.ReactNode
@@ -18,13 +16,10 @@ export default function ClientDashboardLayout({ children }: ClientDashboardLayou
   const [mounted, setMounted] = useState(false)
   const router = useRouter()
 
-  // 🔥 Use AuthContext instead of props
+  // 🔥 Use AuthContext to get user and auth state
   const { user, token, isAuthenticated, loading, error } = useAuth()
 
-  // 🔥 Initialize reliable notifications
-  
-
-  // Set mounted after initial render (client-only)
+  // Set mounted flag after initial render (client-only)
   useEffect(() => {
     setMounted(true)
 
@@ -44,9 +39,10 @@ export default function ClientDashboardLayout({ children }: ClientDashboardLayou
     return () => window.removeEventListener("resize", handleResize)
   }, [])
 
+  // Redirect if not authenticated
   useEffect(() => {
     if (mounted && !loading && !isAuthenticated) {
-      console.log("ClientDashboardLayout: Redirecting to /insurance-login because user is not authenticated")
+      console.log("ClientDashboardLayout: Redirecting to / because user is not authenticated")
       router.push("/")
     }
   }, [mounted, isAuthenticated, loading, router])
@@ -56,6 +52,7 @@ export default function ClientDashboardLayout({ children }: ClientDashboardLayou
     return null
   }
 
+  // Show error or redirect if not authenticated
   if (error || !isAuthenticated || !user) {
     console.log("ClientDashboardLayout: Rendering error state", { error, isAuthenticated, user })
     return (
@@ -64,8 +61,8 @@ export default function ClientDashboardLayout({ children }: ClientDashboardLayou
           <h2 className="text-2xl font-bold text-gray-800 mb-4">Access Error</h2>
           <p className="text-gray-600 mb-6">{error || "Unable to load user data"}</p>
           <button
-            onClick={() => router.push("/insurance-login")}
-            className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+            onClick={() => router.push("/")}
+            className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
           >
             Return to Login
           </button>
@@ -75,38 +72,36 @@ export default function ClientDashboardLayout({ children }: ClientDashboardLayou
   }
 
   return (
-    <PermissionProvider user={user}>
-      <div className="flex h-screen bg-gray-50 overflow-hidden">
-        {/* Backdrop for mobile sidebar */}
-        {mounted && sidebarOpen && (
-          <div
-            className="fixed inset-0 bg-gray-800 bg-opacity-50 z-20 lg:hidden"
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
-
-        {/* Sidebar */}
+    <div className="flex h-screen bg-gray-50 overflow-hidden">
+      {/* Backdrop for mobile sidebar */}
+      {mounted && sidebarOpen && (
         <div
-          className={`fixed lg:relative transform ease-in-out transition-all duration-300 z-30 ${
-            mounted && sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-          } shadow-2xl lg:shadow-xl`}
-        >
-          <Sidebar user={user} error={error} />
-        </div>
+          className="fixed inset-0 bg-gray-800 bg-opacity-50 z-20 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
 
-        {/* Main content area */}
-        <div className="flex flex-col flex-1 w-full overflow-hidden transform transition-all duration-300 ease-in-out">
-          <TopBar
-            user={user}
-            error={error}
-            onMenuClick={() => setSidebarOpen(!sidebarOpen)}
-            token={token}
-          />
-          <main className="flex-1 overflow-y-auto p-3 sm:p-6 perspective-1000 transform-gpu">
-            {children}
-          </main>
-        </div>
+      {/* Sidebar */}
+      <div
+        className={`fixed lg:relative transform ease-in-out transition-all duration-300 z-30 ${
+          mounted && sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        } shadow-2xl lg:shadow-xl`}
+      >
+        <Sidebar user={user} error={error} />
       </div>
-    </PermissionProvider>
+
+      {/* Main content area */}
+      <div className="flex flex-col flex-1 w-full overflow-hidden transform transition-all duration-300 ease-in-out">
+        <TopBar
+          user={user}
+          error={error}
+          onMenuClick={() => setSidebarOpen(!sidebarOpen)}
+          token={token}
+        />
+        <main className="flex-1 overflow-y-auto p-3 sm:p-6 perspective-1000 transform-gpu">
+          {children}
+        </main>
+      </div>
+    </div>
   )
 }

@@ -3,12 +3,6 @@ import React from 'react'
 
 export const dynamic = "force-dynamic"
 
-const EmployeeListPage = () => {
-  return (
-    <div>
-      <EmployeeList/>
-    </div>
-  )
+export default function EmployeesPage() {
+  return <EmployeeList />
 }
-
-export default EmployeeListPage

@@ -1,14 +1,26 @@
-import ClockInForm from '@/components/clock-in'
-import React from 'react'
+import SimpleAttendanceClock from "@/components/clock-in"
+import { getCurrentUserAction } from "@/actions/auth"
+import { redirect } from "next/navigation"
 
-export const dynamic = "force-dynamic"
+export default async function AttendanceClockPage() {
+  let user = null
+  
+  try {
+    user = await getCurrentUserAction()
+  } catch (error) {
+    console.error("User not authenticated:", error)
+    redirect("/")
+  }
 
-const ClockInPage = () => {
+  if (!user) {
+    redirect("/")
+  }
+
   return (
-    <div>
-      <ClockInForm/>
-    </div>
+    <SimpleAttendanceClock 
+      userId={user.id}
+      userName={user.name}
+      userEmail={user.email}
+    />
   )
 }
-
-export default ClockInPage

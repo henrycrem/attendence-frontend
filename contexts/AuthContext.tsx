@@ -1,9 +1,7 @@
 "use client"
-
 import type React from "react"
 import { createContext, useContext, useEffect, useState } from "react"
 import { useDispatch } from "react-redux"
-import { io, type Socket } from "socket.io-client"
 import { setUser } from "../store/slices/authSlice"
 import { checkAuthStatus, loginUserAction, logoutAction, getClientToken } from "../actions/auth"
 
@@ -15,7 +13,6 @@ interface AuthContextType {
   error: string | null
   login: (email: string, password: string) => Promise<void>
   logout: () => void
-  socket: Socket | null
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -26,89 +23,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [socket, setSocket] = useState<Socket | null>(null)
   const dispatch = useDispatch()
 
-  const initializeWebSocket = async (clientToken: string) => {
-    try {
-      const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "http://localhost:5000"
-      console.log("AuthContext: Connecting to WebSocket:", wsUrl)
-
-      const newSocket = io(wsUrl, {
-        auth: { token: clientToken },
-        withCredentials: true,
-        transports: ["websocket", "polling"],
-        reconnection: true,
-        reconnectionAttempts: 5,
-        reconnectionDelay: 1000,
-        timeout: 10000,
-      })
-
-      newSocket.on("connect", () => {
-        console.log("AuthContext: WebSocket connected:", newSocket.id)
-        setError(null)
-
-        // Authenticate with the server
-        if (user?.id) {
-          newSocket.emit("authenticate", {
-            userId: user.id,
-            token: clientToken,
-          })
-        }
-      })
-
-      newSocket.on("authenticated", (data) => {
-        console.log("AuthContext: WebSocket authenticated:", data)
-      })
-
-      newSocket.on("authError", (error) => {
-        console.error("AuthContext: WebSocket auth error:", error)
-        setError("WebSocket authentication failed")
-      })
-
-      newSocket.on("connect_error", (error) => {
-        console.error("AuthContext: WebSocket connect_error:", error.message)
-        setError("WebSocket connection failed")
-      })
-
-      newSocket.on("disconnect", (reason) => {
-        console.log("AuthContext: WebSocket disconnected:", reason)
-      })
-
-      newSocket.on("reconnect", (attemptNumber) => {
-        console.log("AuthContext: WebSocket reconnected after", attemptNumber, "attempts")
-        setError(null)
-
-        // Re-authenticate after reconnection
-        if (user?.id) {
-          newSocket.emit("authenticate", {
-            userId: user.id,
-            token: clientToken,
-          })
-        }
-      })
-
-      newSocket.on("reconnect_error", (error) => {
-        console.error("AuthContext: WebSocket reconnect_error:", error)
-      })
-
-      newSocket.on("reconnect_failed", () => {
-        console.error("AuthContext: WebSocket reconnection failed after maximum attempts")
-        setError("WebSocket reconnection failed")
-      })
-
-      // Listen for user status updates
-      newSocket.on("userStatusUpdate", (data) => {
-        console.log("AuthContext: Received userStatusUpdate:", data)
-      })
-
-      setSocket(newSocket)
-      return newSocket
-    } catch (error) {
-      console.error("AuthContext: Failed to initialize WebSocket:", error)
-      setError("Failed to initialize WebSocket")
-      return null
+  // ✅ Enhanced token fetching with better error handling
+  const fetchTokenWithRetry = async (retries = 3, delay = 500): Promise<string | null> => {
+    for (let i = 0; i < retries; i++) {
+      try {
+        const clientToken = await getClientToken()
+        console.log(`getClientToken succeeded on attempt ${i + 1}`)
+        return clientToken
+      } catch (err) {
+        console.log(`getClientToken failed on attempt ${i + 1}:`, err)
+        if (i === retries - 1) break
+        console.log(`Retrying in ${delay}ms...`)
+        await new Promise(res => setTimeout(res, delay))
+      }
     }
+    return null
   }
 
   useEffect(() => {
@@ -118,6 +49,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log("AuthContext: Initializing auth check...")
 
       try {
+        // ✅ First, try to get the token to see if we have valid cookies
+        const clientToken = await fetchTokenWithRetry(2, 300)
+        
+        if (!clientToken) {
+          console.log("AuthContext: No valid token found, user not authenticated")
+          setUserState(null)
+          setIsAuthenticated(false)
+          setToken(null)
+          setError(null) // ✅ Don't set error for normal unauthenticated state
+          setLoading(false)
+          return
+        }
+
+        // ✅ If we have a token, check auth status
         const authStatus = await checkAuthStatus()
         console.log("AuthContext: Auth status:", authStatus)
 
@@ -125,66 +70,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUserState(authStatus.user)
           dispatch(setUser(authStatus.user))
           setIsAuthenticated(true)
+          setToken(clientToken)
           setError(null)
-
-          try {
-            const clientToken = await getClientToken()
-            console.log("AuthContext: Got client token:", clientToken ? clientToken.slice(0, 10) + "..." : "null")
-            setToken(clientToken)
-
-            // Initialize WebSocket after user is set
-            await initializeWebSocket(clientToken)
-          } catch (tokenError) {
-            console.error("AuthContext: Failed to get client token:", tokenError)
-            setToken(null)
-          }
-
-          console.log("AuthContext: User authenticated:", authStatus.user)
+          console.log("AuthContext: User authenticated successfully:", authStatus.user.email)
         } else {
+          console.log("AuthContext: Auth check failed:", authStatus.error)
           setUserState(null)
           setIsAuthenticated(false)
           setToken(null)
-          setSocket(null)
-          setError(authStatus.error)
-          console.log("AuthContext: User not authenticated:", authStatus.error)
+          setError(null) // ✅ Don't show error for failed auth check
         }
       } catch (error: any) {
-        console.error("AuthContext: Failed to check auth status:", error)
+        console.error("AuthContext: Failed to initialize auth:", error)
         setUserState(null)
         setIsAuthenticated(false)
         setToken(null)
-        setSocket(null)
-        setError(error.message)
+        setError(null) // ✅ Don't show error during initialization
       } finally {
         setLoading(false)
       }
     }
 
     initializeAuth()
-
-    return () => {
-      if (socket) {
-        console.log("AuthContext: Cleaning up WebSocket")
-        socket.disconnect()
-        setSocket(null)
-      }
-    }
   }, [dispatch])
-
-  // Re-initialize WebSocket when user changes
-  useEffect(() => {
-    if (user?.id && token && socket && socket.connected) {
-      console.log("AuthContext: Re-authenticating WebSocket for user:", user.id)
-      socket.emit("authenticate", {
-        userId: user.id,
-        token: token,
-      })
-    }
-  }, [user, token, socket])
 
   const login = async (email: string, password: string) => {
     setLoading(true)
     setError(null)
+    
     try {
       console.log("AuthContext: Attempting login for:", email)
       const formData = new FormData()
@@ -198,20 +111,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error(response.error || "Login failed")
       }
 
-      // Fetch user data after successful login
+      // ✅ Wait longer for cookies to be properly set
+      await new Promise(resolve => setTimeout(resolve, 1500))
+
+      // ✅ Re-initialize auth state after successful login
+      const clientToken = await fetchTokenWithRetry(5, 500)
+      if (!clientToken) {
+        throw new Error("Failed to get access token after login")
+      }
+
       const authStatus = await checkAuthStatus()
       if (authStatus.isAuthenticated && authStatus.user) {
         setUserState(authStatus.user)
         dispatch(setUser(authStatus.user))
         setIsAuthenticated(true)
-        setError(null)
-
-        // Get token and initialize WebSocket
-        const clientToken = await getClientToken()
-        console.log("AuthContext: Got client token after login:", clientToken.slice(0, 10) + "...")
         setToken(clientToken)
-
-        await initializeWebSocket(clientToken)
+        setError(null)
+        console.log("AuthContext: Login successful, user authenticated")
       } else {
         throw new Error("Failed to fetch user data after login")
       }
@@ -228,9 +144,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     console.log("AuthContext: Logging out")
     try {
       await logoutAction()
-      if (socket) {
-        socket.disconnect()
-      }
     } catch (error) {
       console.error("AuthContext: Logout error:", error)
     }
@@ -238,7 +151,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUserState(null)
     setIsAuthenticated(false)
     setError(null)
-    setSocket(null)
     dispatch(setUser(null))
   }
 
@@ -252,7 +164,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         error,
         login,
         logout,
-        socket,
       }}
     >
       {children}

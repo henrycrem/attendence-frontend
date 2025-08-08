@@ -1,611 +1,554 @@
-"use client";
+"use client"
+import { useState, useEffect } from "react"
+import { MapPin, Clock, CheckCircle, XCircle, AlertCircle, Calendar, Wifi, WifiOff } from 'lucide-react'
+import { checkIn, checkOut, getTodayAttendance } from "@/actions/attendence"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { formatTime, formatDate } from "@/lib/attendance-utils"
 
-import { useState, useEffect, useRef } from "react";
-import { useAuth } from "@/contexts/AuthContext";
+interface SimpleAttendanceClockProps {
+  userId: string
+  userName: string
+  userEmail: string
+}
 
-import { MapPin, Wifi, QrCode, Navigation, Calendar, CheckCircle, XCircle, AlertCircle } from "lucide-react";
+export default function SimpleAttendanceClock({ 
+  userId, 
+  userName, 
+  userEmail 
+}: SimpleAttendanceClockProps) {
+  const [attendance, setAttendance] = useState<any>(null)
+  const [checkInLoading, setCheckInLoading] = useState(false) // ✅ Separate loading states
+  const [checkOutLoading, setCheckOutLoading] = useState(false) // ✅ Separate loading states
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
+  const [hasCheckedInToday, setHasCheckedInToday] = useState(false)
+  const [hasCheckedOutToday, setHasCheckedOutToday] = useState(false)
+  const [locationStatus, setLocationStatus] = useState<'checking' | 'good' | 'poor' | 'failed'>('checking')
+  const [networkStatus, setNetworkStatus] = useState<'online' | 'offline' | 'checking'>('online')
+  const [retryCount, setRetryCount] = useState(0)
 
-import { checkIn, checkOut, getWorkplaces, getEmployeeDetails } from "@/actions/attendence";
-import axios from "axios";
-import toast, { Toaster } from "react-hot-toast";
-// @ts-ignore
-import { BrowserQRCodeReader } from '@zxing/library';
-
-const ClockInForm = () => {
-  const { user, token, socket, isAuthenticated } = useAuth();
-  const [attendance, setAttendance] = useState<any>(null);
-  const [workplaces, setWorkplaces] = useState<{ id: string; name: string }[]>([]);
-  const [selectedMethod, setSelectedMethod] = useState<"gps" | "qr" | "manual" | "ip">("gps");
-  const [selectedLocation, setSelectedLocation] = useState("");
-  const [checkInTime, setCheckInTime] = useState<string>("");
-  const [checkOutTime, setCheckOutTime] = useState<string>("");
-  const [loading, setLoading] = useState(false);
-  const [locationPermission, setLocationPermission] = useState<"granted" | "denied" | "prompt">("prompt");
-  const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
-  const [scanning, setScanning] = useState(false);
-  const [employeeDetails, setEmployeeDetails] = useState<any>(null);
-  const [showTimeInput, setShowTimeInput] = useState<"check-in" | "check-out" | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-
-  // Debug toasts
-  const debugToast = (type: string, message: string) => {
-    console.log(`Toast triggered: ${type} - ${message}`);
-    if (type === "error") {
-      toast.error(message);
-    } else if (type === "success") {
-      toast.success(message);
-    }
-  };
-
-  // Fetch employee details and today's attendance
+  // Fetch today's attendance
   useEffect(() => {
-    async function fetchData() {
+    async function fetchTodayAttendance() {
       try {
-        console.log("fetchData: Fetching employee details and workplaces");
-        const [employeeResponse, workplacesResponse] = await Promise.all([
-          getEmployeeDetails(user.id),
-          getWorkplaces(),
-        ]);
-        setEmployeeDetails(employeeResponse.data);
-        setWorkplaces(workplacesResponse.data);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const todayAttendance = employeeResponse.data.attendance.find(
-          (att: any) => new Date(att.date).toDateString() === today.toDateString()
-        );
-        setAttendance(todayAttendance || null);
-        console.log("fetchData: Success, attendance:", todayAttendance);
+        const response = await getTodayAttendance(userId)
+        setAttendance(response.data)
+        
+        // Check what actions have been done today
+        if (response.data) {
+          setHasCheckedInToday(!!response.data.signInTime)
+          setHasCheckedOutToday(!!response.data.signOutTime)
+        } else {
+          setHasCheckedInToday(false)
+          setHasCheckedOutToday(false)
+        }
       } catch (err: any) {
-        console.error("fetchData: Error:", err.message);
-        setError(err.message);
-        debugToast("error", err.message);
+        console.error("Failed to fetch today's attendance:", err)
+        setError(err.message)
       }
     }
-    if (user?.id) {
-      fetchData();
-    }
-  }, [user?.id]);
 
-  // Handle WebSocket location updates
-  useEffect(() => {
-    if (!isAuthenticated || !socket) {
-      console.log("Attendance: WebSocket not connected, isAuthenticated:", isAuthenticated);
-      setError("WebSocket not connected");
-      debugToast("error", "WebSocket not connected");
-      return;
-    }
+    fetchTodayAttendance()
+  }, [userId])
 
-    console.log("Attendance: Setting up geolocation and WebSocket listeners");
-    navigator.permissions.query({ name: "geolocation" }).then((result) => {
-      setLocationPermission(result.state);
-      if (result.state === "denied") {
-        console.log("Attendance: Location permission denied, emitting null location");
-        socket.emit("locationUpdate", { userId: user.id, latitude: null, longitude: null, source: "gps" });
-      }
-    });
-
-    if (navigator.geolocation) {
-      const watchId = navigator.geolocation.watchPosition(
-        (position) => {
-          const { latitude, longitude, accuracy } = position.coords;
-          console.log("WebSocket: Sending location update:", { latitude, longitude, accuracy });
-          socket.emit("locationUpdate", { userId: user.id, latitude, longitude, source: "gps", accuracy });
-          setLocationPermission("granted");
-        },
-        (error) => {
-          console.error("Attendance: Geolocation error:", error);
-          socket.emit("locationUpdate", { userId: user.id, latitude: null, longitude: null, source: "gps" });
-          setLocationPermission("denied");
-        },
-        { enableHighAccuracy: true, timeout: 50000, maximumAge: 0 }
-      );
-
-      socket.on("locationError", ({ error }) => {
-        console.error("Attendance: Location error from server:", error);
-        setError(error);
-        debugToast("error", error);
-      });
-
-      return () => {
-        console.log("Attendance: Cleaning up geolocation and WebSocket listeners");
-        navigator.geolocation.clearWatch(watchId);
-        socket.off("locationError");
-      };
-    }
-  }, [user?.id, socket, isAuthenticated]);
-
-  // Handle QR scanning
-  useEffect(() => {
-    if (scanning && videoRef.current && isAuthenticated && socket) {
-      console.log("Attendance: Starting QR scanner");
-      const codeReader = new BrowserQRCodeReader();
-      codeReader
-        .decodeFromVideoDevice(null, videoRef.current, (result, error) => {
-          if (result) {
-            console.log("Attendance: QR code scanned:", result.getText());
-            setSelectedLocation(result.getText());
-            const action = buttonStates.canCheckIn ? handleCheckIn : buttonStates.canCheckOut ? handleCheckOut : null;
-            if (action) action();
-          }
-          if (error) {
-            console.error("Attendance: QR scan failed:", error);
-            setError("QR scan failed");
-            debugToast("error", "QR scan failed");
-          }
+  // ✅ Enhanced location function with proper GPS quality check and IP fallback
+const getCurrentLocation = (): Promise<{latitude: number, longitude: number, accuracy: number, method: 'gps' | 'ip'}> => {
+  return new Promise(async (resolve, reject) => {
+    setLocationStatus('checking')
+  
+    if (!navigator.geolocation) {
+      console.log("GPS not supported, falling back to IP location")
+      setLocationStatus('failed')
+      try {
+        // Directly get IP location if GPS not supported
+        const ipLocation = await getIPLocationFallback()
+        setLocationStatus('poor')
+        resolve({
+          latitude: ipLocation.latitude,
+          longitude: ipLocation.longitude,
+          accuracy: ipLocation.accuracy,
+          method: 'ip'
         })
-        .catch((err) => {
-          console.error("Attendance: Failed to start QR scanner:", err);
-          setError("Failed to start QR scanner");
-          debugToast("error", "Failed to start QR scanner");
-        });
-      return () => {
-        console.log("Attendance: Resetting QR scanner");
-        codeReader.reset();
-      };
-    }
-  }, [scanning, isAuthenticated, socket]);
-
-  // Determine button states
-  const getButtonStates = () => {
-    if (!attendance) {
-      return { canCheckIn: true, canCheckOut: false, isCompleted: false };
-    }
-    if (attendance.status === "SIGNED_IN") {
-      return { canCheckIn: false, canCheckOut: true, isCompleted: false };
-    }
-    if (attendance.status === "SIGNED_OUT") {
-      return { canCheckIn: false, canCheckOut: false, isCompleted: true };
-    }
-    return { canCheckIn: true, canCheckOut: false, isCompleted: false };
-  };
-
-  const buttonStates = getButtonStates();
-
-  // Get current location
-  const getCurrentLocation = () => {
-    return new Promise<{ latitude: number; longitude: number; accuracy: number }>((resolve, reject) => {
-      if (!navigator.geolocation) {
-        console.error("getCurrentLocation: Geolocation not supported");
-        reject(new Error("Geolocation is not supported"));
-        return;
+      } catch (ipError) {
+        setLocationStatus('failed')
+        reject(new Error("Location services unavailable. Please enable GPS or check your internet connection."))
       }
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const location = {
+      return
+    }
+
+    // Try to get GPS location first
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const accuracy = position.coords.accuracy
+        console.log("GPS Location obtained with accuracy:", accuracy)
+      
+        // ✅ Check GPS quality and decide whether to use it or fallback to IP
+        if (accuracy <= 100) {
+          setLocationStatus('good')
+          resolve({
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
-            accuracy: position.coords.accuracy,
-          };
-          console.log("getCurrentLocation:", location);
-          resolve(location);
-        },
-        (error) => {
-          console.error("getCurrentLocation: Error:", error);
-          setLocationPermission("denied");
-          debugToast("error", error.message);
-          reject(error);
-        },
-        { enableHighAccuracy: true, timeout: 50000, maximumAge: 0 }
-      );
-    });
-  };
+            accuracy: accuracy,
+            method: 'gps'
+          })
+        } else if (accuracy <= 1000) {
+          setLocationStatus('poor')
+          console.log("GPS accuracy is poor but acceptable:", accuracy)
+          resolve({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: accuracy,
+            method: 'gps'
+          })
+        } else {
+          // ✅ GPS accuracy too poor, fallback to IP
+          console.log("GPS accuracy too poor (", accuracy, "m), falling back to IP location")
+          setLocationStatus('poor')
+          try {
+            const ipLocation = await getIPLocationFallback()
+            resolve({
+              latitude: ipLocation.latitude,
+              longitude: ipLocation.longitude,
+              accuracy: ipLocation.accuracy,
+              method: 'ip'
+            })
+          } catch (ipError) {
+            console.warn("IP location failed, using poor GPS as last resort")
+            resolve({
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+              accuracy: accuracy,
+              method: 'gps'
+            })
+          }
+        }
+      },
+      async (error) => {
+        console.error("GPS location failed:", error)
+        setLocationStatus('failed')
+      
+        // ✅ GPS failed completely, fallback to IP location
+        console.log("GPS failed, attempting IP location fallback")
+        try {
+          const ipLocation = await getIPLocationFallback()
+          setLocationStatus('poor')
+          resolve({
+            latitude: ipLocation.latitude,
+            longitude: ipLocation.longitude,
+            accuracy: ipLocation.accuracy,
+            method: 'ip'
+          })
+        } catch (ipError) {
+          setLocationStatus('failed')
+          let errorMessage = "Unable to determine your location. "
+          switch (error.code) {
+            case error.PERMISSION_DENIED:
+              errorMessage += "Please allow location access in your browser settings."
+              break
+            case error.POSITION_UNAVAILABLE:
+              errorMessage += "Location services are unavailable."
+              break
+            case error.TIMEOUT:
+              errorMessage += "Location request timed out."
+              break
+            default:
+              errorMessage += "Please check your GPS and internet connection."
+              break
+          }
+          reject(new Error(errorMessage))
+        }
+      },
+      { 
+        enableHighAccuracy: true, // Try for best accuracy first
+        timeout: 10000, // 10 second timeout
+        maximumAge: 300000 // 5 minutes cache
+      }
+    )
+  })
+}
 
-  // Get IP location
-  const getIPLocation = async () => {
+// ✅ Add IP location fallback function to frontend
+const getIPLocationFallback = async () => {
+  const services = [
+    {
+      name: 'ipapi.co',
+      url: 'https://ipapi.co/json/',
+      parser: (data: any) => ({
+        latitude: data.latitude,
+        longitude: data.longitude,
+        accuracy: 1000 // IP location is approximate
+      })
+    },
+    {
+      name: 'ip-api.com', 
+      url: 'http://ip-api.com/json/',
+      parser: (data: any) => ({
+        latitude: data.lat,
+        longitude: data.lon,
+        accuracy: 1000
+      })
+    }
+  ]
+
+  for (const service of services) {
     try {
-      console.log("getIPLocation: Fetching IP location");
-      const response = await axios.get("https://ipapi.co/json/", { timeout: 100000 });
-      console.log("getIPLocation:", response.data);
-      return { ipAddress: response.data.ip, latitude: response.data.latitude, longitude: response.data.longitude };
+      console.log(`Trying IP location service: ${service.name}`)
+      const response = await fetch(service.url, { 
+        signal: AbortSignal.timeout(5000) // 5 second timeout
+      })
+      
+      if (!response.ok) continue
+      
+      const data = await response.json()
+      const result = service.parser(data)
+      
+      // Validate the result
+      if (!result.latitude || !result.longitude || 
+          Math.abs(result.latitude) > 90 || Math.abs(result.longitude) > 180) {
+        continue
+      }
+      
+      console.log(`Successfully got IP location from ${service.name}`)
+      return result
     } catch (error) {
-      console.error("Attendance: Failed to fetch IP location:", error);
-      debugToast("error", "Failed to fetch IP location");
-      throw new Error("Failed to fetch IP location");
+      console.warn(`${service.name} failed:`, error)
+      continue
     }
-  };
+  }
+  
+  throw new Error('All IP location services failed')
+}
 
-  // Handle check-in
+  // ✅ Enhanced check-in with retry feedback
   const handleCheckIn = async () => {
-    setLoading(true);
-    setError(null);
-    setMessage(null);
-    try {
-      console.log("handleCheckIn: Starting with method:", selectedMethod);
-      let params: any = { userId: user.id, method: selectedMethod, timestamp: checkInTime || new Date().toISOString() };
-      if (selectedMethod === "gps") {
-        const location = await getCurrentLocation();
-        params = { ...params, latitude: location.latitude, longitude: location.longitude, accuracy: location.accuracy };
-      } else if (selectedMethod === "qr" || selectedMethod === "manual") {
-        if (!selectedLocation) {
-          console.error("handleCheckIn: Missing workplace location");
-          throw new Error("Please select a workplace location");
-        }
-        params = { ...params, locationId: selectedLocation };
-      } else if (selectedMethod === "ip") {
-        const ipLocation = await getIPLocation();
-        params = { ...params, ipAddress: ipLocation.ipAddress, latitude: ipLocation.latitude, longitude: ipLocation.longitude };
-      }
-      console.log("handleCheckIn: Sending params:", params);
-      const result = await checkIn(params);
-      console.log("handleCheckIn: Result:", result);
-      debugToast("success", result.message);
-      setMessage(result.message);
-      setAttendance(result.data);
-      setShowTimeInput(null);
-    } catch (err: any) {
-      console.error("handleCheckIn: Error:", err.message);
-      setError(err.message);
-      debugToast("error", err.message);
-    } finally {
-      setLoading(false);
-      setScanning(false);
-      console.log("handleCheckIn: Completed");
+    if (hasCheckedInToday) {
+      setError("You have already checked in today!")
+      return
     }
-  };
 
-  // Handle check-out
+    setCheckInLoading(true)
+    setError(null)
+    setSuccess(null)
+    setRetryCount(0)
+    setNetworkStatus('checking')
+
+    try {
+      // Get current location
+      const location = await getCurrentLocation()
+      
+      const params = {
+        userId,
+        method: location.method,
+        latitude: location.latitude,
+        longitude: location.longitude,
+        accuracy: location.accuracy
+      }
+
+      const result = await checkIn(params)
+      setSuccess(result.message)
+      setHasCheckedInToday(true)
+      setNetworkStatus('online')
+      
+      // Refresh attendance data
+      setTimeout(async () => {
+        const updatedAttendance = await getTodayAttendance(userId)
+        setAttendance(updatedAttendance.data)
+      }, 1000)
+
+    } catch (err: any) {
+      console.error("Check-in error:", err)
+      setNetworkStatus('offline')
+      
+      // Provide more specific error messages
+      if (err.message.includes('Connection') || err.message.includes('network')) {
+        setError("Network connection failed. Please check your internet connection and try again.")
+      } else if (err.message.includes('server')) {
+        setError("Server is temporarily unavailable. Please try again in a few moments.")
+      } else {
+        setError(err.message)
+      }
+    } finally {
+      setCheckInLoading(false)
+      setLocationStatus('checking')
+    }
+  }
+
+  // ✅ Enhanced check-out with better UX
   const handleCheckOut = async () => {
-    setLoading(true);
-    setError(null);
-    setMessage(null);
+    if (hasCheckedOutToday) {
+      setError("You have already checked out today!")
+      return
+    }
+
+    setCheckOutLoading(true) // ✅ Only set check-out loading
+    setError(null)
+    setSuccess(null)
+
     try {
-      console.log("handleCheckOut: Starting with method:", selectedMethod);
-      let params: any = { userId: user.id, method: selectedMethod, timestamp: checkOutTime || new Date().toISOString() };
-      if (selectedMethod === "gps") {
-        const location = await getCurrentLocation();
-        params = { ...params, latitude: location.latitude, longitude: location.longitude, accuracy: location.accuracy };
-      } else if (selectedMethod === "qr" || selectedMethod === "manual") {
-        if (!selectedLocation) {
-          console.error("handleCheckOut: Missing workplace location");
-          throw new Error("Please select a workplace location");
-        }
-        params = { ...params, locationId: selectedLocation };
-      } else if (selectedMethod === "ip") {
-        const ipLocation = await getIPLocation();
-        params = { ...params, ipAddress: ipLocation.ipAddress, latitude: ipLocation.latitude, longitude: ipLocation.longitude };
+      // Get current location
+      const location = await getCurrentLocation()
+      
+      const params = {
+        userId,
+        method: location.method,
+        latitude: location.latitude,
+        longitude: location.longitude,
+        accuracy: location.accuracy
       }
-      console.log("handleCheckOut: Sending params:", params);
-      const result = await checkOut(params);
-      console.log("handleCheckOut: Result:", result);
-      debugToast("success", result.message);
-      setMessage(result.message);
-      setAttendance(result.data);
-      setShowTimeInput(null);
+
+      const result = await checkOut(params)
+      setSuccess(result.message)
+      setHasCheckedOutToday(true)
+      
+      // Refresh attendance data
+      setTimeout(async () => {
+        const updatedAttendance = await getTodayAttendance(userId)
+        setAttendance(updatedAttendance.data)
+      }, 1000)
+
     } catch (err: any) {
-      console.error("handleCheckOut: Error:", err.message);
-      setError(err.message);
-      debugToast("error", err.message);
+      console.error("Check-out error:", err)
+      setError(err.message)
     } finally {
-      setLoading(false);
-      setScanning(false);
-      console.log("handleCheckOut: Completed");
+      setCheckOutLoading(false) // ✅ Only reset check-out loading
+      setLocationStatus('checking')
     }
-  };
+  }
 
-  // Format time and date
-  const formatTime = (dateString?: string) => {
-    if (!dateString) return "--:--";
-    return new Date(dateString).toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return "Today";
-    return new Date(dateString).toLocaleDateString("en-US", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-  };
-
-  // Get last updated time
-  const getLastUpdated = () => {
-    if (attendance?.updatedAt) {
-      return formatTime(attendance.updatedAt);
+  // ✅ Location status indicator
+  const getLocationStatusIcon = () => {
+    switch (locationStatus) {
+      case 'checking':
+        return <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
+      case 'good':
+        return <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+      case 'poor':
+        return <div className="w-2 h-2 bg-orange-400 rounded-full"></div>
+      case 'failed':
+        return <div className="w-2 h-2 bg-red-400 rounded-full"></div>
+      default:
+        return <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
     }
-    return formatTime(employeeDetails?.user.lastStatusUpdate);
-  };
+  }
 
-  // Handle Check In button click
-  const handleCheckInClick = () => {
-    const now = new Date();
-    setCheckInTime(now.toISOString());
-    setShowTimeInput("check-in");
-    console.log("handleCheckInClick: Set check-in time:", now.toISOString());
-  };
-
-  // Handle Check Out button click
-  const handleCheckOutClick = () => {
-    const now = new Date();
-    setCheckOutTime(now.toISOString());
-    setShowTimeInput("check-out");
-    console.log("handleCheckOutClick: Set check-out time:", now.toISOString());
-  };
+  const getLocationStatusText = () => {
+    switch (locationStatus) {
+      case 'checking':
+        return 'Checking location...'
+      case 'good':
+        return 'GPS location accurate'
+      case 'poor':
+        return 'Using approximate location'
+      case 'failed':
+        return 'Location unavailable'
+      default:
+        return 'Location ready'
+    }
+  }
 
   return (
-    <div className="min-h-screen bg-slate-900 p-4">
-      <Toaster position="top-right" toastOptions={{ duration: 5000, style: { background: '#1e293b', color: '#e5e7eb', border: '1px solid #475569' } }} />
-      <div className="relative z-10 max-w-4xl mx-auto">
+    <div className="min-h-screen bg-white/70 backdrop-blur-sm p-4">
+      <div className="max-w-2xl mx-auto space-y-6">
         {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-200 mb-2">Employee Attendance</h1>
-          <p className="text-gray-400 text-lg">{formatDate(new Date().toISOString())}</p>
+        <div className="text-center space-y-2">
+          <h1 className="text-2xl font-bold text-gray-800">Attendance Clock</h1>
+          <p className="text-gray-600 text-lg">{formatDate()}</p>
         </div>
 
         {/* User Info Card */}
-        <div className="bg-slate-800/80 backdrop-blur-xl rounded-3xl p-6 mb-8 border border-slate-700/50">
-          <div className="flex items-center space-x-4 mb-4">
-            <div className="w-16 h-16 bg-gradient-to-r from-red-500 to-red-600 rounded-full flex items-center justify-center text-white text-xl font-bold">
-              {employeeDetails?.user.name?.split(" ").map((n: string) => n[0]).join("")}
+        <Card className="bg-white/80 border-gray-200 backdrop-blur-sm shadow-lg">
+          <CardContent className="p-6">
+            <div className="flex items-center space-x-4">
+              <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-xl font-bold">
+                {userName.split(" ").map((n: string) => n[0]).join("").toUpperCase()}
+              </div>
+              <div className="flex-1">
+                <h2 className="text-xl font-semibold text-gray-800">{userName}</h2>
+                <p className="text-gray-600">{userEmail}</p>
+                <div className="flex items-center space-x-2 mt-1">
+                  <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                  <span className="text-sm text-gray-500">Online</span>
+                </div>
+              </div>
             </div>
-            <div>
-              <h2 className="text-xl font-semibold text-gray-200">{employeeDetails?.user.name}</h2>
-              <p className="text-gray-400">{employeeDetails?.user.email}</p>
-              <p className="text-gray-400">{employeeDetails?.user.department?.name || "N/A"}</p>
-            </div>
-          </div>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <div
-                className={`w-3 h-3 rounded-full ${
-                  socket?.connected ? "bg-green-400" : "bg-gray-400"
-                }`}
-              ></div>
-              <span className="text-gray-400 capitalize">{socket?.connected ? "online" : "offline"}</span>
-            </div>
-            <div className="text-right">
-              <p className="text-sm text-gray-400">Last Updated</p>
-              <p className="text-gray-200">{getLastUpdated()}</p>
-            </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
         {/* Today's Status */}
-        <div className="bg-slate-800/80 backdrop-blur-xl rounded-3xl p-6 mb-8 border border-slate-700/50">
-          <h3 className="text-xl font-semibold text-gray-200 mb-4 flex items-center">
-            <Calendar className="mr-2 text-red-500" size={20} />
-            Today's Status
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-slate-900/50 rounded-2xl p-4 border border-slate-700/50">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-gray-400">Check-in</span>
-                {attendance?.signInTime ? (
-                  <CheckCircle className="text-green-400" size={20} />
-                ) : (
-                  <XCircle className="text-gray-400" size={20} />
+        <Card className="bg-white/80 border-gray-200 backdrop-blur-sm shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-gray-800 flex items-center">
+              <Calendar className="mr-2 text-blue-500" size={20} />
+              Today's Status
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-gray-50/80 rounded-lg p-4 border border-gray-200">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-gray-600">Check-in</span>
+                  {hasCheckedInToday ? (
+                    <CheckCircle className="text-green-500" size={20} />
+                  ) : (
+                    <XCircle className="text-gray-400" size={20} />
+                  )}
+                </div>
+                <p className="text-gray-800 text-xl font-semibold">
+                  {hasCheckedInToday ? formatTime(attendance?.signInTime) : "--:--"}
+                </p>
+                {attendance?.signInLocation?.address && (
+                  <p className="text-gray-500 text-xs mt-1 truncate">
+                    {attendance.signInLocation.address}
+                  </p>
                 )}
               </div>
-              <p className="text-gray-200 text-xl font-semibold">{formatTime(attendance?.signInTime)}</p>
-            </div>
-            <div className="bg-slate-900/50 rounded-2xl p-4 border border-slate-700/50">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-gray-400">Check-out</span>
-                {attendance?.signOutTime ? (
-                  <CheckCircle className="text-green-400" size={20} />
-                ) : (
-                  <XCircle className="text-gray-400" size={20} />
+              
+              <div className="bg-gray-50/80 rounded-lg p-4 border border-gray-200">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-gray-600">Check-out</span>
+                  {hasCheckedOutToday ? (
+                    <CheckCircle className="text-green-500" size={20} />
+                  ) : (
+                    <XCircle className="text-gray-400" size={20} />
+                  )}
+                </div>
+                <p className="text-gray-800 text-xl font-semibold">
+                  {hasCheckedOutToday ? formatTime(attendance?.signOutTime) : "--:--"}
+                </p>
+                {attendance?.signOutLocation?.address && (
+                  <p className="text-gray-500 text-xs mt-1 truncate">
+                    {attendance.signOutLocation.address}
+                  </p>
                 )}
               </div>
-              <p className="text-gray-200 text-xl font-semibold">{formatTime(attendance?.signOutTime)}</p>
             </div>
-            <div className="bg-slate-900/50 rounded-2xl p-4 border border-slate-700/50">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-gray-400">Status</span>
-                {buttonStates.isCompleted ? (
-                  <CheckCircle className="text-green-400" size={20} />
-                ) : (
-                  <AlertCircle className="text-yellow-400" size={20} />
-                )}
-              </div>
-              <p className="text-gray-200 text-lg font-semibold">
-                {buttonStates.isCompleted
-                  ? "Completed"
-                  : attendance?.status === "SIGNED_IN"
-                  ? "Checked In"
-                  : "Not Started"}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Check-in/Check-out Methods */}
-        <div className="bg-slate-800/80 backdrop-blur-xl rounded-3xl p-6 mb-8 border border-slate-700/50">
-          <h3 className="text-xl font-semibold text-gray-200 mb-4">Select Method</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            {[
-              { id: "gps", icon: Navigation, label: "GPS Location", disabled: locationPermission === "denied" },
-              { id: "qr", icon: QrCode, label: "QR Code", disabled: workplaces.length === 0 },
-              { id: "manual", icon: MapPin, label: "Manual", disabled: workplaces.length === 0 },
-              { id: "ip", icon: Wifi, label: "IP Location", disabled: false },
-            ].map((method) => (
-              <button
-                key={method.id}
-                onClick={() => {
-                  setSelectedMethod(method.id as any);
-                  if (method.id === "qr") setScanning(true);
-                  console.log("Selected method:", method.id);
-                }}
-                disabled={method.disabled}
-                className={`p-4 rounded-2xl border-2 transition-all duration-300 transform hover:scale-105 ${
-                  selectedMethod === method.id
-                    ? "border-red-500 bg-red-500/20 text-gray-200"
-                    : method.disabled
-                    ? "border-slate-600 bg-slate-600/10 text-gray-500 cursor-not-allowed"
-                    : "border-slate-700/50 bg-slate-900/50 text-gray-400 hover:border-red-500/50"
-                }`}
-              >
-                <method.icon className="mx-auto mb-2 text-red-500" size={24} />
-                <p className="text-sm font-medium">{method.label}</p>
-              </button>
-            ))}
-          </div>
-
-          {/* QR Scanner */}
-          {selectedMethod === "qr" && scanning && (
-            <div className="mb-6">
-              <video
-                ref={videoRef}
-                style={{ width: "100%", maxHeight: 300 }}
-                className="rounded-xl"
-              />
-              <button
-                onClick={() => setScanning(false)}
-                className="mt-2 bg-slate-700 text-gray-200 px-4 py-2 rounded-lg hover:bg-slate-600"
-              >
-                Cancel Scan
-              </button>
-            </div>
-          )}
-
-          {/* Location Selection for QR/Manual */}
-          {(selectedMethod === "qr" || selectedMethod === "manual") && !scanning && (
-            <div className="mb-6">
-              <label className="block text-gray-200 mb-2">Select Workplace</label>
-              {workplaces.length === 0 ? (
-                <p className="text-yellow-400">No workplaces available. Please use GPS or IP method.</p>
-              ) : (
-                <select
-                  value={selectedLocation}
-                  onChange={(e) => setSelectedLocation(e.target.value)}
-                  className="w-full p-3 rounded-xl bg-slate-900/50 border border-slate-700/50 text-gray-200 backdrop-blur-lg focus:outline-none focus:border-red-500"
-                >
-                  <option value="">Choose a workplace...</option>
-                  {workplaces.map((workplace) => (
-                    <option key={workplace.id} value={workplace.id} className="bg-slate-900">
-                      {workplace.name}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-          )}
-
-          {/* Check-In Time Input */}
-          {showTimeInput === "check-in" && buttonStates.canCheckIn && (
-            <div className="mb-6">
-              <label className="block text-gray-200 mb-2">Check-In Time</label>
-              <input
-                type="datetime-local"
-                value={checkInTime.slice(0, 16)}
-                readOnly
-                className="w-full p-3 rounded-xl bg-slate-900/50 border border-slate-700/50 text-gray-200 backdrop-blur-lg"
-              />
-              <button
-                onClick={handleCheckIn}
-                disabled={loading}
-                className={`mt-4 w-full p-3 rounded-xl font-semibold text-lg transition-all duration-300 ${
-                  !loading
-                    ? "bg-gradient-to-r from-red-500 to-red-600 text-white border border-red-400/50"
-                    : "bg-slate-600/50 text-gray-400 cursor-not-allowed border border-slate-600/50"
-                }`}
-              >
-                Confirm Check-In
-              </button>
-            </div>
-          )}
-
-          {/* Check-Out Time Input */}
-          {showTimeInput === "check-out" && buttonStates.canCheckOut && (
-            <div className="mb-6">
-              <label className="block text-gray-200 mb-2">Check-Out Time</label>
-              <input
-                type="datetime-local"
-                value={checkOutTime.slice(0, 16)}
-                readOnly
-                className="w-full p-3 rounded-xl bg-slate-900/50 border border-slate-700/50 text-gray-200 backdrop-blur-lg"
-              />
-              <button
-                onClick={handleCheckOut}
-                disabled={loading}
-                className={`mt-4 w-full p-3 rounded-xl font-semibold text-lg transition-all duration-300 ${
-                  !loading
-                    ? "bg-gradient-to-r from-red-500 to-red-600 text-white border border-red-400/50"
-                    : "bg-slate-600/50 text-gray-400 cursor-not-allowed border border-slate-600/50"
-                }`}
-              >
-                Confirm Check-Out
-              </button>
-            </div>
-          )}
-        </div>
+          </CardContent>
+        </Card>
 
         {/* Action Buttons */}
-        {!showTimeInput && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <button
-              onClick={handleCheckInClick}
-              disabled={!buttonStates.canCheckIn || loading}
-              className={`relative p-6 rounded-3xl font-semibold text-lg transition-all duration-300 transform hover:scale-105 ${
-                buttonStates.canCheckIn && !loading
-                  ? "bg-gradient-to-r from-red-500 to-red-600 text-white border border-red-400/50"
-                  : "bg-slate-600/50 text-gray-400 cursor-not-allowed border border-slate-600/50"
-              }`}
-            >
-              <div className="flex items-center justify-center space-x-3">
-                {loading ? (
-                  <div className="w-6 h-6 border-2 border-gray-200/30 border-t-gray-200 rounded-full animate-spin" />
-                ) : (
-                  <CheckCircle size={24} />
-                )}
-                <span>Check In</span>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Button
+            onClick={handleCheckIn}
+            disabled={hasCheckedInToday || checkInLoading} // ✅ Only disable for check-in loading
+            size="lg"
+            className="h-20 text-xl font-semibold bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white cursor-pointer"
+          >
+            {checkInLoading ? ( // ✅ Only show loading for check-in
+              <div className="flex items-center space-x-2">
+                <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span>Clocking In...</span>
               </div>
-            </button>
-            <button
-              onClick={handleCheckOutClick}
-              disabled={!buttonStates.canCheckOut || loading}
-              className={`relative p-6 rounded-3xl font-semibold text-lg transition-all duration-300 transform hover:scale-105 ${
-                buttonStates.canCheckOut && !loading
-                  ? "bg-gradient-to-r from-red-500 to-red-600 text-white border border-red-400/50"
-                  : "bg-slate-600/50 text-gray-400 cursor-not-allowed border border-slate-600/50"
-              }`}
-            >
-              <div className="flex items-center justify-center space-x-3">
-                {loading ? (
-                  <div className="w-6 h-6 border-2 border-gray-200/30 border-t-gray-200 rounded-full animate-spin" />
-                ) : (
-                  <XCircle size={24} />
+            ) : (
+              <div className="flex flex-col items-center space-y-2">
+                <CheckCircle size={32} />
+                <span>Clock In</span>
+                {hasCheckedInToday && (
+                  <span className="text-sm opacity-75">Already done today</span>
                 )}
-                <span>Check Out</span>
               </div>
-            </button>
-          </div>
-        )}
+            )}
+          </Button>
+
+          <Button
+            onClick={handleCheckOut}
+            disabled={hasCheckedOutToday || checkOutLoading} // ✅ Only disable for check-out loading
+            size="lg"
+            className="h-20 text-xl font-semibold bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white cursor-pointer"
+          >
+            {checkOutLoading ? ( // ✅ Only show loading for check-out
+              <div className="flex items-center space-x-2">
+                <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span>Clocking Out...</span>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center space-y-2">
+                <XCircle size={32} />
+                <span>Clock Out</span>
+                {hasCheckedOutToday && (
+                  <span className="text-sm opacity-75">Already done today</span>
+                )}
+              </div>
+            )}
+          </Button>
+        </div>
 
         {/* Status Messages */}
-        {message && (
-          <div className="mt-8 bg-green-500/20 border border-green-400/50 rounded-2xl p-4 text-center">
-            <CheckCircle className="mx-auto mb-2 text-green-400" size={32} />
-            <p className="text-green-400 font-medium">{message}</p>
-          </div>
+        {success && (
+          <Alert className="bg-green-100/80 border-green-300 backdrop-blur-sm">
+            <CheckCircle className="h-4 w-4 text-green-600" />
+            <AlertDescription className="text-green-700">{success}</AlertDescription>
+          </Alert>
         )}
+
         {error && (
-          <div className="mt-8 bg-red-500/20 border border-red-400/50 rounded-2xl p-4 text-center">
-            <AlertCircle className="mx-auto mb-2 text-red-400" size={32} />
-            <p className="text-red-400 font-medium">{error}</p>
-          </div>
+          <Alert className="bg-red-100/80 border-red-300 backdrop-blur-sm">
+            <AlertCircle className="h-4 w-4 text-red-600" />
+            <AlertDescription className="text-red-700">{error}</AlertDescription>
+          </Alert>
         )}
-        {buttonStates.isCompleted && (
-          <div className="mt-8 bg-green-500/20 border border-green-400/50 rounded-2xl p-4 text-center">
-            <CheckCircle className="mx-auto mb-2 text-green-400" size={32} />
-            <p className="text-green-400 font-medium">Attendance completed for today. See you tomorrow!</p>
-          </div>
+
+        {hasCheckedInToday && hasCheckedOutToday && (
+          <Alert className="bg-green-100/80 border-green-300 backdrop-blur-sm">
+            <CheckCircle className="h-4 w-4 text-green-600" />
+            <AlertDescription className="text-green-700">
+              Attendance completed for today. Great work!
+            </AlertDescription>
+          </Alert>
         )}
-        {locationPermission === "denied" && selectedMethod === "gps" && (
-          <div className="mt-8 bg-red-500/20 border border-red-400/50 rounded-2xl p-4 text-center">
-            <AlertCircle className="mx-auto mb-2 text-red-400" size={32} />
-            <p className="text-red-400 font-medium">
-              Location access denied. Please enable location services or choose a different method.
-            </p>
-          </div>
-        )}
+
+        {/* ✅ Enhanced Location Info with Network Status */}
+        <Card className="bg-white/80 border-gray-200 backdrop-blur-sm shadow-lg">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center space-x-2 text-gray-600 text-sm">
+                <MapPin className="w-4 h-4" />
+                <span>{getLocationStatusText()}</span>
+              </div>
+              {getLocationStatusIcon()}
+            </div>
+            
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2 text-gray-600 text-sm">
+                {networkStatus === 'online' ? (
+                  <>
+                    <Wifi className="w-4 h-4 text-green-500" />
+                    <span className="text-green-600">Connected</span>
+                  </>
+                ) : networkStatus === 'offline' ? (
+                  <>
+                    <WifiOff className="w-4 h-4 text-red-500" />
+                    <span className="text-red-600">Connection issues</span>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-4 h-4 border-2 border-gray-400 border-t-blue-500 rounded-full animate-spin" />
+                    <span className="text-blue-600">Connecting...</span>
+                  </>
+                )}
+              </div>
+            </div>
+            
+            {locationStatus === 'poor' && (
+              <p className="text-xs text-orange-600 mt-2">
+                For better accuracy, try moving to an open area away from buildings.
+              </p>
+            )}
+            {locationStatus === 'failed' && (
+              <p className="text-xs text-blue-600 mt-2">
+                Using approximate location based on your internet connection.
+              </p>
+            )}
+            {networkStatus === 'offline' && (
+              <p className="text-xs text-red-600 mt-2">
+                Please check your internet connection and try again.
+              </p>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
-  );
-};
-
-export default ClockInForm;
+  )
+}

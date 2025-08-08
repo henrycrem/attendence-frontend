@@ -1,128 +1,153 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
-import { getCurrentUserAction } from "./actions/auth"
 
-// Define route permissions for Telecel Liberia Attendance System
-const ROUTE_PERMISSIONS = {
-  // Employee routes
-  "/dashboard/attendance/clock-in": ["create_attendance"],
-  "/dashboard/attendance/clock-out": ["create_attendance"],
-  "/dashboard/attendance/my-records": ["view_own_attendance"],
-  "/dashboard/leave/request": ["create_leave_request"],
-  "/dashboard/leave/my-requests": ["edit_own_leave_request"],
-  "/dashboard/schedule/my-schedule": ["view_own_schedule"],
-  "/dashboard/profile": ["view_own_profile"],
-  "/dashboard/profile/edit": ["edit_own_profile"],
-  "/dashboard/reports/my-reports": ["view_own_reports"],
+const ALLOWED_ROUTES = {
+  employee: [
+    "/dashboard/attendance/clock-in",
+    "/dashboard/attendance/my-records", 
+    "/dashboard/profile",
+    "/dashboard/profile/edit",
+    "/dashboard/settings",
+    "/dashboard/help",
+  ],
+  super_admin: "/dashboard",
+}
 
-  // Admin/HR routes
-  "/dashboard/employees": ["view_employees"],
-  "/dashboard/employees/new": ["create_employee"],
-  "/dashboard/employees/[id]/edit": ["update_employee"],
-  "/dashboard/attendance": ["view_attendance"],
-  "/dashboard/attendance/manage": ["manage_attendance"],
-  "/dashboard/attendance/record": ["manage_attendance"],
-  "/dashboard/leave-requests": ["view_leave_requests"],
-  "/dashboard/leave-requests/[id]/review": ["approve_leave_requests"],
-  "/dashboard/compliance": ["view_compliance_reports"],
-  "/dashboard/compliance/generate": ["generate_reports"],
-  "/dashboard/departments": ["view_departments"],
-  "/dashboard/schedules": ["view_schedules"],
-  "/dashboard/schedules/create": ["create_schedule"],
+const ROLE_REDIRECTS = {
+  employee: "/dashboard/attendance/my-records",
+  super_admin: "/dashboard"
+}
 
-  // User management routes
-  "/dashboard/users": ["view_users"],
-  "/dashboard/users/new": ["create_user"],
+// ✅ Add security headers
+function addSecurityHeaders(response: NextResponse): NextResponse {
+  response.headers.set('X-Frame-Options', 'DENY')
+  response.headers.set('X-Content-Type-Options', 'nosniff')
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
+  response.headers.set('X-XSS-Protection', '1; mode=block')
+  
+  return response
+}
 
-  // Role management routes
-  "/dashboard/roles": ["view_roles"],
-  "/dashboard/create_role": ["create_role"],
-  "/dashboard/user-roles": ["manage_roles"],
-  "/dashboard/permissions": ["manage_permissions"],
+function matchesAllowedPath(pathname: string, allowedPaths: string[] | string): boolean {
+  if (Array.isArray(allowedPaths)) {
+    return allowedPaths.some(
+      (path) => pathname === path || pathname.startsWith(`${path}/`)
+    )
+  }
+  return pathname === allowedPaths || pathname.startsWith(`${allowedPaths}/`)
+}
 
-  // System routes
-  "/dashboard/settings": ["view_settings"],
-  "/dashboard/help": ["view_help"],
-} as const
+// ✅ Simple token validation without calling server action
+async function validateToken(request: NextRequest): Promise<{ isValid: boolean; user?: any }> {
+  try {
+    const accessToken = request.cookies.get("access_token")?.value
+    
+    if (!accessToken) {
+      console.log("Middleware: No access token found")
+      return { isValid: false }
+    }
+
+    // ✅ Call the API directly instead of using server action
+    const response = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/api/me`, {
+      method: 'GET',
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${accessToken}`,
+        "User-Agent": "Telecel-Attendance-System/1.0",
+      },
+      cache: 'no-store',
+    })
+
+    if (!response.ok) {
+      console.log(`Middleware: Token validation failed with status: ${response.status}`)
+      return { isValid: false }
+    }
+
+    const data = await response.json()
+    console.log(`Middleware: Token validation successful for user: ${data.user?.email}`)
+    return { isValid: true, user: data.user }
+
+  } catch (error) {
+    console.error("Middleware: Token validation error:", error)
+    return { isValid: false }
+  }
+}
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
+  const ip = request.ip || request.headers.get('x-forwarded-for') || 'unknown'
 
-  // Skip middleware for non-dashboard routes
+  console.log(`Middleware: Processing request for ${pathname}`)
+
+  // ✅ Add security headers to all responses
+  let response = NextResponse.next()
+  response = addSecurityHeaders(response)
+
+  // ✅ Only protect dashboard routes
   if (!pathname.startsWith("/dashboard")) {
-    return NextResponse.next()
+    console.log(`Middleware: Non-dashboard route ${pathname}, allowing access`)
+    return response
   }
 
   try {
-    const user = await getCurrentUserAction()
-
-    if (!user) {
-      console.log("No user found, redirecting to login")
+    console.log(`Middleware: Validating token for dashboard route: ${pathname}`)
+    const { isValid, user } = await validateToken(request)
+    
+    if (!isValid || !user) {
+      console.log(`Middleware: Invalid token or no user, redirecting to login`)
       return NextResponse.redirect(new URL("/", request.url))
     }
 
-    // Check route-specific permissions
-    const requiredPermissions = getRequiredPermissions(pathname)
-    console.log(`Route: ${pathname}, Required permissions:`, requiredPermissions)
+    const roleName = user.role?.roleName as keyof typeof ALLOWED_ROUTES
+    
+    if (!roleName) {
+      console.warn(`Middleware: User ${user.id} has no role assigned`)
+      return NextResponse.redirect(new URL("/unauthorized", request.url))
+    }
 
-    if (requiredPermissions.length > 0) {
-      const userPermissions = getUserPermissions(user)
-      console.log("User permissions:", userPermissions)
+    console.log(`Middleware: User ${user.email} (${roleName}) accessing ${pathname}`)
 
-      const hasAccess = requiredPermissions.some((permission) => userPermissions.includes(permission))
-
-      console.log(`Access check for ${pathname}: ${hasAccess}`)
-
-      if (!hasAccess) {
-        console.log(`Access denied for ${pathname}. Required: ${requiredPermissions}, User has: ${userPermissions}`)
-        return NextResponse.redirect(new URL("/unauthorized", request.url))
+    // ✅ Handle role-based redirects for /dashboard root access
+    if (pathname === "/dashboard") {
+      const redirectPath = ROLE_REDIRECTS[roleName]
+      if (redirectPath && redirectPath !== "/dashboard") {
+        console.log(`Middleware: Redirecting ${roleName} from /dashboard to ${redirectPath}`)
+        return NextResponse.redirect(new URL(redirectPath, request.url))
       }
     }
 
-    return NextResponse.next()
+    // ✅ Check if user has access to the requested path
+    let isAllowed = false
+    
+    if (roleName === "super_admin") {
+      isAllowed = matchesAllowedPath(pathname, ALLOWED_ROUTES.super_admin)
+    } else if (roleName === "employee") {
+      isAllowed = matchesAllowedPath(pathname, ALLOWED_ROUTES.employee)
+    } else {
+      console.warn(`Middleware: Unknown role: ${roleName} for user ${user.id}`)
+      return NextResponse.redirect(new URL("/unauthorized", request.url))
+    }
+
+    if (isAllowed) {
+      console.log(`Middleware: Access granted for ${roleName} to ${pathname}`)
+      return addSecurityHeaders(NextResponse.next())
+    }
+
+    // ✅ Log unauthorized access attempts
+    console.warn(`Middleware: Access denied for user ${user.id} (${roleName}) on: ${pathname} from IP: ${ip}`)
+    return NextResponse.redirect(new URL("/unauthorized", request.url))
+
   } catch (error) {
-    console.error("Middleware error:", error)
+    console.error("Middleware: Unexpected error:", error)
+    
+    // ✅ On error, redirect to login for dashboard routes
+    console.log(`Middleware: Error occurred, redirecting to login`)
     return NextResponse.redirect(new URL("/", request.url))
   }
 }
 
-function getRequiredPermissions(pathname: string): string[] {
-  // Direct match first
-  if (ROUTE_PERMISSIONS[pathname as keyof typeof ROUTE_PERMISSIONS]) {
-    return Array.from(ROUTE_PERMISSIONS[pathname as keyof typeof ROUTE_PERMISSIONS])
-  }
-
-  // Pattern matching for dynamic routes
-  for (const [route, permissions] of Object.entries(ROUTE_PERMISSIONS)) {
-    if (route.includes("[id]")) {
-      const routePattern = route.replace("[id]", "")
-      if (pathname.startsWith(routePattern)) {
-        return Array.from(permissions)
-      }
-    }
-  }
-
-  return []
-}
-
-function getUserPermissions(user: any): string[] {
-  if (user.permissions && Array.isArray(user.permissions)) {
-    return user.permissions
-  }
-
-  if (user.role?.permissions) {
-    if (Array.isArray(user.role.permissions)) {
-      return user.role.permissions
-    }
-
-    if (typeof user.role.permissions === "object") {
-      return Object.keys(user.role.permissions).filter((key) => user.role.permissions[key] === true)
-    }
-  }
-
-  return []
-}
-
 export const config = {
-  matcher: ["/dashboard/:path*"],
+  matcher: [
+    "/dashboard/:path*",
+  ],
 }

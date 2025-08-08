@@ -1,309 +1,290 @@
-"use client";
+'use client'
 
-import { useState, useEffect } from "react";
-import { useAuth } from "@/contexts/AuthContext";
-import { useRouter } from "next/navigation";
-import { MapPin, Users, Wifi, WifiOff, Eye } from "lucide-react";
-import { Toaster, toast } from "react-hot-toast";
-import { getAllEmployees } from "@/actions/attendence";
+import { useState, useEffect } from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Badge } from '@/components/ui/badge'
+import { Search, Users, Eye, ChevronLeft, ChevronRight } from 'lucide-react'
+import { getAllEmployeesReal, getDepartments } from '@/actions/employee'
+import Link from 'next/link'
 
 interface Employee {
-  id: string; // employeeId
-  userId: string; // Corresponding userId
-  name: string;
-  email: string;
-  position: string;
-  department: string | null;
-  isOnline: boolean;
-  lastSeen: string | null;
-  lastLocation?: { latitude: number; longitude: number; timestamp?: string; address?: string };
+  id: string
+  employeeId: string
+  name: string
+  email: string
+  department: string
+  role: string
+  position: string
+  totalAttendance: number
+  lastOnlineStatus: string
+  lastStatusUpdate: string | null
+  hireDate: string | null
+  createdAt: string
 }
 
-const EmployeeList = () => {
-  const { socket, isAuthenticated } = useAuth();
-  const router = useRouter();
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+interface Department {
+  id: string
+  name: string
+  employeeCount: number
+}
 
-  // Fetch employees data
+interface Pagination {
+  currentPage: number
+  totalPages: number
+  totalRecords: number
+  hasNext: boolean
+  hasPrev: boolean
+}
+
+export default function EmployeeList() {
+  const [employees, setEmployees] = useState<Employee[]>([])
+  const [departments, setDepartments] = useState<Department[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  
+  // Filters and pagination
+  const [search, setSearch] = useState('')
+  const [selectedDepartment, setSelectedDepartment] = useState('all')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pagination, setPagination] = useState<Pagination>({
+    currentPage: 1,
+    totalPages: 1,
+    totalRecords: 0,
+    hasNext: false,
+    hasPrev: false
+  })
+
+  const fetchEmployees = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      
+      const response = await getAllEmployeesReal({
+        page: currentPage,
+        limit: 10,
+        search: search.trim(),
+        department: selectedDepartment === 'all' ? undefined : selectedDepartment,
+      })
+
+      setEmployees(response.data.employees)
+      setPagination(response.data.pagination)
+    } catch (err: any) {
+      console.error('Failed to fetch employees:', err)
+      setError(err.message || 'Failed to load employees')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchDepartments = async () => {
+    try {
+      const response = await getDepartments()
+      setDepartments(response.data.departments)
+    } catch (err: any) {
+      console.error('Failed to fetch departments:', err)
+    }
+  }
+
   useEffect(() => {
-    async function fetchEmployees() {
-      try {
-        setLoading(true);
-        console.log("Employees: Fetching all employees");
-        const response = await getAllEmployees();
-        // Map response to include employeeId and userId
-        const formattedEmployees = response.data.employees.map((emp: any) => ({
-          id: emp.employeeId, // From Employee table
-          userId: emp.userId, // From Employee.userId
-          name: emp.name,
-          email: emp.email,
-          position: emp.position,
-          department: emp.department,
-          isOnline: emp.isOnline,
-          lastSeen: emp.lastSeen,
-          lastLocation: emp.lastLocation,
-        }));
-        setEmployees(formattedEmployees);
-        console.log("Employees: Loaded employees:", formattedEmployees);
-      } catch (err: any) {
-        console.error("Employees: Error fetching employees:", err.message);
-        setError(err.message);
-        toast.error(err.message);
-      } finally {
-        setLoading(false);
-      }
-    }
+    fetchDepartments()
+  }, [])
 
-    if (isAuthenticated) {
-      fetchEmployees();
-    }
-  }, [isAuthenticated]);
-
-  // Handle WebSocket updates for employee status and location
   useEffect(() => {
-    if (!isAuthenticated || !socket) {
-      console.log("Employees: WebSocket not connected, isAuthenticated:", isAuthenticated);
-      return;
+    fetchEmployees()
+  }, [currentPage, search, selectedDepartment])
+
+  const handleSearch = (value: string) => {
+    setSearch(value)
+    setCurrentPage(1) // Reset to first page when searching
+  }
+
+  const handleDepartmentChange = (value: string) => {
+    setSelectedDepartment(value)
+    setCurrentPage(1) // Reset to first page when filtering
+  }
+
+  const getStatusBadge = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case 'online':
+        return <Badge variant="default" className="bg-green-100 text-green-800">Online</Badge>
+      case 'offline':
+        return <Badge variant="secondary">Offline</Badge>
+      default:
+        return <Badge variant="outline">Unknown</Badge>
     }
+  }
 
-    console.log("Employees: Setting up WebSocket listeners");
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return 'N/A'
+    return new Date(dateString).toLocaleDateString()
+  }
 
-    const handleLocationUpdate = (data: any) => {
-      console.log("Employees: Received locationUpdate:", data);
-      const { userId, latitude, longitude, address, timestamp } = data;
-
-      setEmployees((prev) =>
-        prev.map((emp) =>
-          emp.userId === userId
-            ? {
-                ...emp,
-                isOnline: true,
-                lastSeen: timestamp,
-                lastLocation: { latitude, longitude, address, timestamp },
-              }
-            : emp,
-        ),
-      );
-    };
-
-    const handleUserStatusUpdate = (data: any) => {
-      console.log("Employees: Received userStatusUpdate:", data);
-      const { userId, isOnline, lastSeen } = data;
-
-      setEmployees((prev) =>
-        prev.map((emp) =>
-          emp.userId === userId
-            ? {
-                ...emp,
-                isOnline,
-                lastSeen,
-              }
-            : emp,
-        ),
-      );
-    };
-
-    const handleLocationError = ({ error }: { error: string }) => {
-      console.error("Employees: Location error from server:", error);
-      setError(error);
-      toast.error(error);
-    };
-
-    socket.on("locationUpdate", handleLocationUpdate);
-    socket.on("userStatusUpdate", handleUserStatusUpdate);
-    socket.on("locationError", handleLocationError);
-
-    employees.forEach((employee) => {
-      socket.on(`locationUpdated:${employee.userId}`, handleLocationUpdate);
-    });
-
-    return () => {
-      console.log("Employees: Cleaning up WebSocket listeners");
-      socket.off("locationUpdate", handleLocationUpdate);
-      socket.off("userStatusUpdate", handleUserStatusUpdate);
-      socket.off("locationError", handleLocationError);
-      employees.forEach((employee) => {
-        socket.off(`locationUpdated:${employee.userId}`);
-      });
-    };
-  }, [socket, isAuthenticated, employees]);
-
-  const handleEmployeeClick = (employeeId: string) => {
-    console.log("EmployeeListPage: Navigating to employee map for employeeId:", employeeId);
-    router.push(`/dashboard/employees/employee-map/${employeeId}`);
-  };
-
-  const formatLastSeen = (lastSeen: string | null) => {
-    if (!lastSeen) return "N/A";
-    const date = new Date(lastSeen);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    if (diffMins < 1) return "Just now";
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`;
-    return date.toLocaleDateString("en-US", { dateStyle: "medium" });
-  };
-
-  if (loading) {
+  if (error) {
     return (
-      <div className="min-h-screen bg-slate-900 p-4">
-        <div className="max-w-4xl mx-auto">
-          <div className="text-center py-20">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-500 mx-auto mb-4"></div>
-            <p className="text-gray-400">Loading employees...</p>
-          </div>
-        </div>
+      <div className="min-h-screen bg-gray-50 p-6">
+        <Card className="max-w-md mx-auto">
+          <CardContent className="p-6 text-center">
+            <p className="text-red-600 mb-4">{error}</p>
+            <Button onClick={fetchEmployees}>Try Again</Button>
+          </CardContent>
+        </Card>
       </div>
-    );
+    )
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 p-4">
-      <Toaster
-        position="top-right"
-        toastOptions={{
-          duration: 5000,
-          style: { background: "#1e293b", color: "#e5e7eb", border: "1px solid #475569" },
-        }}
-      />
-
-      <div className="relative z-10 max-w-4xl mx-auto">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-200 mb-2 flex items-center justify-center">
-            <Users className="mr-3 text-red-500" size={36} />
-            Employee Tracking Dashboard
-          </h1>
-          <p className="text-gray-400 text-lg">
-            {new Date().toLocaleDateString("en-US", {
-              weekday: "long",
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-            })}
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-slate-800/80 backdrop-blur-xl rounded-2xl p-6 border border-slate-700/50">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-400 text-sm">Total Employees</p>
-                <p className="text-2xl font-bold text-gray-200">{employees.length}</p>
-              </div>
-              <Users className="text-red-500" size={32} />
-            </div>
-          </div>
-          <div className="bg-slate-800/80 backdrop-blur-xl rounded-2xl p-6 border border-slate-700/50">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-400 text-sm">Online Now</p>
-                <p className="text-2xl font-bold text-green-400">{employees.filter((emp) => emp.isOnline).length}</p>
-              </div>
-              <Wifi className="text-green-400" size={32} />
-            </div>
-          </div>
-          <div className="bg-slate-800/80 backdrop-blur-xl rounded-2xl p-6 border border-slate-700/50">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-400 text-sm">Offline</p>
-                <p className="text-2xl font-bold text-red-400">{employees.filter((emp) => !emp.isOnline).length}</p>
-              </div>
-              <WifiOff className="text-red-400" size={32} />
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <Users className="h-8 w-8 text-blue-600" />
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Employee Management</h1>
+              <p className="text-gray-600">Manage and view employee information</p>
             </div>
           </div>
         </div>
 
-        {socket && socket.connected ? (
-          <div className="bg-green-500/20 border border-green-400/50 rounded-2xl p-4 text-center mb-6">
-            <p className="text-green-400 font-medium">✅ Real-time tracking active</p>
-          </div>
-        ) : (
-          <div className="bg-red-500/20 border border-red-400/50 rounded-2xl p-4 text-center mb-6">
-            <p className="text-red-400 font-medium">❌ Real-time tracking disconnected</p>
-          </div>
-        )}
+        {/* Filters */}
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex-1">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                  <Input
+                    placeholder="Search employees by name or email..."
+                    value={search}
+                    onChange={(e) => handleSearch(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+              </div>
+              <div className="w-full sm:w-48">
+                <Select value={selectedDepartment} onValueChange={handleDepartmentChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select Department" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Departments</SelectItem>
+                    {departments.map((dept) => (
+                      <SelectItem key={dept.id} value={dept.name}>
+                        {dept.name} ({dept.employeeCount})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-        <div className="bg-slate-800/80 backdrop-blur-xl rounded-3xl border border-slate-700/50 overflow-hidden">
-          <div className="p-6 border-b border-slate-700/50">
-            <h3 className="text-xl font-semibold text-gray-200 flex items-center">
-              <MapPin className="mr-2 text-red-500" size={20} />
-              Employee Locations
-            </h3>
-            <p className="text-gray-400 text-sm mt-1">Click on any employee to view their location tracking</p>
-          </div>
+        {/* Employee Table */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <span>Employees ({pagination.totalRecords})</span>
+              {loading && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="flex justify-center items-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              </div>
+            ) : employees.length === 0 ? (
+              <div className="text-center py-8">
+                <Users className="mx-auto h-12 w-12 text-gray-400" />
+                <h3 className="mt-2 text-sm font-medium text-gray-900">No employees found</h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  {search || selectedDepartment !== 'all' 
+                    ? 'Try adjusting your search or filter criteria.' 
+                    : 'No employees have been added yet.'}
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Department</TableHead>
+                        <TableHead>Position</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Attendance</TableHead>
+                        <TableHead>Hire Date</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {employees.map((employee) => (
+                        <TableRow key={employee.id}>
+                          <TableCell className="font-medium">{employee.name}</TableCell>
+                          <TableCell>{employee.email}</TableCell>
+                          <TableCell>{employee.department}</TableCell>
+                          <TableCell>{employee.position}</TableCell>
+                          <TableCell>{getStatusBadge(employee.lastOnlineStatus)}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{employee.totalAttendance} records</Badge>
+                          </TableCell>
+                          <TableCell>{formatDate(employee.hireDate)}</TableCell>
+                          <TableCell>
+                            <Link href={`/dashboard/employees/${employee.id}`}>
+                              <Button variant="outline" size="sm">
+                                <Eye className="h-4 w-4 mr-1" />
+                                View
+                              </Button>
+                            </Link>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
 
-          {error ? (
-            <div className="p-8 text-center">
-              <p className="text-red-400">{error}</p>
-            </div>
-          ) : employees.length === 0 ? (
-            <div className="p-8 text-center">
-              <p className="text-gray-400">No employees found</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-slate-700/30">
-                  <tr>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-300">Status</th>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-300">Name</th>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-300">Position</th>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-300">Last Seen</th>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-300">Location</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {employees.map((employee) => (
-                    <tr
-                      key={employee.id}
-                      className="hover:bg-slate-700/20 cursor-pointer"
-                      onClick={() => handleEmployeeClick(employee.id)}
-                    >
-                      <td className="px-6 py-4 text-sm font-medium text-gray-200">
-                        {employee.isOnline ? (
-                          <div className="flex items-center">
-                            <Wifi className="mr-2 text-green-400" size={16} />
-                            Online
-                          </div>
-                        ) : (
-                          <div className="flex items-center">
-                            <WifiOff className="mr-2 text-red-400" size={16} />
-                            Offline
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-sm font-medium text-gray-200">{employee.name}</td>
-                      <td className="px-6 py-4 text-sm font-medium text-gray-200">{employee.position}</td>
-                      <td className="px-6 py-4 text-sm font-medium text-gray-200">
-                        {formatLastSeen(employee.lastSeen)}
-                      </td>
-                      <td className="px-6 py-4 text-sm font-medium text-gray-200">
-                        {employee.lastLocation ? (
-                          <div className="flex items-center">
-                            <MapPin className="mr-2 text-red-500" size={16} />
-                            {employee.lastLocation.address ||
-                              `${employee.lastLocation.latitude.toFixed(4)}, ${employee.lastLocation.longitude.toFixed(4)}`}
-                          </div>
-                        ) : (
-                          <div className="flex items-center">
-                            <Eye className="mr-2 text-gray-400" size={16} />
-                            Not Available
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+                {/* Pagination */}
+                {pagination.totalPages > 1 && (
+                  <div className="flex items-center justify-between mt-6">
+                    <div className="text-sm text-gray-700">
+                      Showing {((pagination.currentPage - 1) * 10) + 1} to {Math.min(pagination.currentPage * 10, pagination.totalRecords)} of {pagination.totalRecords} results
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => prev - 1)}
+                        disabled={!pagination.hasPrev}
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                        Previous
+                      </Button>
+                      <span className="text-sm text-gray-700">
+                        Page {pagination.currentPage} of {pagination.totalPages}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => prev + 1)}
+                        disabled={!pagination.hasNext}
+                      >
+                        Next
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
-  );
-};
-
-export default EmployeeList;
+  )
+}

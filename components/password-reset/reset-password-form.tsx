@@ -1,166 +1,151 @@
-"use client"
+'use client'
 
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { Lock, Eye, EyeOff, Check, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Lock, Eye, EyeOff, Check, X, ArrowLeft } from 'lucide-react'
+import { resetPasswordAction } from '@/actions/auth'
 
-const SetPasswordForm: React.FC = () => {
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [roleId, setRoleId] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
-  const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] = useState(false);
-  const [passwordStrength, setPasswordStrength] = useState(0);
-  const [confirmPasswordError, setConfirmPasswordError] = useState('');
+const ResetPasswordPageForm: React.FC = () => {
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+  const [email, setEmail] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false)
+  const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] = useState(false)
+  const [passwordStrength, setPasswordStrength] = useState(0)
+  const [confirmPasswordError, setConfirmPasswordError] = useState('')
 
-  const searchParams = useSearchParams();
-  const router = useRouter();
+  const searchParams = useSearchParams()
+  const router = useRouter()
 
   useEffect(() => {
-    const email = searchParams.get('email');
-    const name = searchParams.get('name');
-    const roleId = searchParams.get('roleId');
-
-    console.log('Query Parameters:', { email, name, roleId });
-
-    if (!email || !name || !roleId) {
-      setError('Invalid or missing user data. Please restart the registration process.');
-      return;
+    const emailParam = searchParams.get('email')
+    if (emailParam) {
+      setEmail(emailParam)
+    } else {
+      setError('Invalid request. Please start the password reset process again.')
     }
-
-    setEmail(email);
-    setName(name);
-    setRoleId(roleId);
-  }, [searchParams]);
+  }, [searchParams])
 
   useEffect(() => {
     if (password) {
-      let strength = 0;
-      if (password.length >= 6) strength += 1;
-      if (password.match(/[A-Z]/)) strength += 1;
-      if (password.match(/[0-9]/)) strength += 1;
-      if (password.match(/[^A-Za-z0-9]/)) strength += 1;
-      setPasswordStrength(strength);
+      let strength = 0
+      if (password.length >= 6) strength += 1
+      if (password.match(/[A-Z]/)) strength += 1
+      if (password.match(/[0-9]/)) strength += 1
+      if (password.match(/[^A-Za-z0-9]/)) strength += 1
+      setPasswordStrength(strength)
     } else {
-      setPasswordStrength(0);
+      setPasswordStrength(0)
     }
-  }, [password]);
+  }, [password])
 
   useEffect(() => {
     if (confirmPassword) {
       if (password !== confirmPassword) {
-        setConfirmPasswordError('Passwords do not match');
+        setConfirmPasswordError('Passwords do not match')
       } else {
-        setConfirmPasswordError('');
+        setConfirmPasswordError('')
       }
     } else {
-      setConfirmPasswordError('');
+      setConfirmPasswordError('')
     }
-  }, [password, confirmPassword]);
+  }, [password, confirmPassword])
 
   const getPasswordStrengthText = () => {
-    if (passwordStrength < 2) return 'Weak';
-    if (passwordStrength < 4) return 'Medium';
-    return 'Strong';
-  };
+    if (passwordStrength < 2) return 'Weak'
+    if (passwordStrength < 4) return 'Medium'
+    return 'Strong'
+  }
 
   const getPasswordStrengthColor = () => {
-    if (passwordStrength < 2) return 'bg-red-500';
-    if (passwordStrength < 4) return 'bg-yellow-500';
-    return 'bg-green-500';
-  };
+    if (passwordStrength < 2) return 'bg-red-500'
+    if (passwordStrength < 4) return 'bg-yellow-500'
+    return 'bg-green-500'
+  }
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setError('');
-    setSuccess('');
-    setIsLoading(true);
+    e.preventDefault()
+    setError('')
+    setSuccess('')
+    setIsLoading(true)
 
-    if (!email || !name || !roleId) {
-      setError('User data is missing. Please restart the registration process.');
-      setIsLoading(false);
-      return;
+    if (!email) {
+      setError('Invalid request. Please start the password reset process again.')
+      setIsLoading(false)
+      return
     }
 
     if (password.length < 6) {
-      setError('Password must be at least 6 characters long');
-      setIsLoading(false);
-      return;
+      setError('Password must be at least 6 characters long')
+      setIsLoading(false)
+      return
     }
 
     if (!/[A-Z]/.test(password)) {
-      setError('Password must contain at least one uppercase letter');
-      setIsLoading(false);
-      return;
+      setError('Password must contain at least one uppercase letter')
+      setIsLoading(false)
+      return
     }
 
     if (!/[0-9]/.test(password)) {
-      setError('Password must contain at least one number');
-      setIsLoading(false);
-      return;
+      setError('Password must contain at least one number')
+      setIsLoading(false)
+      return
     }
 
     if (!/[^A-Za-z0-9]/.test(password)) {
-      setError('Password must contain at least one special character');
-      setIsLoading(false);
-      return;
+      setError('Password must contain at least one special character')
+      setIsLoading(false)
+      return
     }
 
     if (password !== confirmPassword) {
-      setError('Passwords do not match');
-      setIsLoading(false);
-      return;
+      setError('Passwords do not match')
+      setIsLoading(false)
+      return
     }
 
     try {
-      const response = await axios.post(`${process.env.NEXT_PUBLIC_SERVER_URL}/api/set-password`, {
-        email,
-        name,
-        roleId,
-        password,
-      });
-
-      setSuccess(response.data.message);
-      setTimeout(() => {
-        router.push(response.data.redirect || '/');
-      }, 2000);
+      const result = await resetPasswordAction(email, password)
+      
+      if (result.success) {
+        setSuccess(result.data.message)
+        setTimeout(() => {
+          router.push('/')
+        }, 3000)
+      } else {
+        setError(result.error || 'Failed to reset password')
+      }
     } catch (err: any) {
-      console.error('SetPassword Error:', err.response?.data);
-      setError(err.response?.data?.message || 'An error occurred');
+      setError('An unexpected error occurred. Please try again.')
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8" style={{ backgroundColor: '#f8f9fa' }}>
       <div className="max-w-md w-full">
-        {/* Main card with clean, classic design */}
+        {/* Main card */}
         <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-8">
-          {/* Header with lock icon */}
+          {/* Header */}
           <div className="text-center mb-8">
             <div className="mx-auto w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
               <Lock className="w-8 h-8 text-red-600" />
             </div>
             
             <h2 className="text-2xl font-semibold text-gray-800 mb-3">
-              Set Your Password
+              Reset Your Password
             </h2>
             <p className="text-gray-600 text-sm mb-4">
-              Create a secure password for your account
+              Create a new secure password for your account
             </p>
             
-            {email && name && (
+            {email && (
               <div className="text-sm text-gray-700 bg-gray-50 rounded-lg p-4 border border-gray-200">
-                <p className="mb-2">
-                  <span className="font-medium text-red-600">Name:</span> {name}
-                </p>
                 <p>
                   <span className="font-medium text-red-600">Email:</span> {email}
                 </p>
@@ -192,7 +177,7 @@ const SetPasswordForm: React.FC = () => {
             {/* Password input */}
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-                Password
+                New Password
               </label>
               <div className="relative">
                 <input
@@ -202,7 +187,7 @@ const SetPasswordForm: React.FC = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full p-3 pr-10 bg-white text-gray-800 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200"
-                  placeholder="Enter your password"
+                  placeholder="Enter your new password"
                   required
                   disabled={isLoading}
                 />
@@ -218,15 +203,15 @@ const SetPasswordForm: React.FC = () => {
                   )}
                 </button>
               </div>
-
+              
               {/* Password Strength Indicator */}
               {password && (
                 <div className="mt-3 space-y-2">
                   <div className="flex justify-between items-center">
                     <span className="text-xs text-gray-600">Password Strength</span>
                     <span className={`text-xs font-medium ${
-                      passwordStrength < 2 ? 'text-red-600' : 
-                      passwordStrength < 4 ? 'text-yellow-600' : 'text-green-600'
+                      passwordStrength < 2 ? 'text-red-600' :
+                       passwordStrength < 4 ? 'text-yellow-600' : 'text-green-600'
                     }`}>
                       {getPasswordStrengthText()}
                     </span>
@@ -266,7 +251,7 @@ const SetPasswordForm: React.FC = () => {
             {/* Confirm Password input */}
             <div>
               <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
-                Confirm Password
+                Confirm New Password
               </label>
               <div className="relative">
                 <input
@@ -278,7 +263,7 @@ const SetPasswordForm: React.FC = () => {
                   className={`w-full p-3 pr-10 bg-white text-gray-800 border rounded-md focus:outline-none focus:ring-2 transition-colors duration-200 ${
                     confirmPasswordError ? 'border-red-300 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-red-500 focus:border-red-500'
                   }`}
-                  placeholder="Confirm your password"
+                  placeholder="Confirm your new password"
                   required
                   disabled={isLoading}
                 />
@@ -313,7 +298,7 @@ const SetPasswordForm: React.FC = () => {
             </div>
 
             {/* Submit button */}
-            <div className="pt-4">
+            <div className="space-y-4">
               <button
                 type="submit"
                 disabled={isLoading || confirmPasswordError !== '' || passwordStrength < 4}
@@ -322,11 +307,21 @@ const SetPasswordForm: React.FC = () => {
                 {isLoading ? (
                   <div className="flex items-center justify-center">
                     <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin mr-3"></div>
-                    Setting Password...
+                    Resetting Password...
                   </div>
                 ) : (
-                  'Set Password'
+                  'Reset Password'
                 )}
+              </button>
+
+              {/* Back button */}
+              <button
+                type="button"
+                onClick={() => router.push('/verify-reset-password')}
+                className="w-full bg-white border border-gray-300 text-gray-700 font-medium py-3 px-6 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors duration-200 flex items-center justify-center"
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back to Verification
               </button>
             </div>
           </form>
@@ -336,12 +331,12 @@ const SetPasswordForm: React.FC = () => {
         <div className="text-center mt-6">
           <p className="text-gray-600 text-sm flex items-center justify-center">
             <Lock className="w-4 h-4 mr-2 text-red-600" />
-            Protected by enterprise-grade security
+            Your password will be encrypted and stored securely
           </p>
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default SetPasswordForm;
+export default ResetPasswordPageForm

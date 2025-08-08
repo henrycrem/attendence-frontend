@@ -128,50 +128,40 @@ const VerifyOtpForm: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-cyan-900 via-blue-900 to-indigo-900 py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
-      {/* Animated background elements */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-10 -left-10 w-96 h-96 bg-cyan-500 rounded-full opacity-10 animate-pulse filter blur-3xl"></div>
-        <div className="absolute top-1/3 -right-20 w-80 h-80 bg-blue-500 rounded-full opacity-15 animate-bounce filter blur-2xl"></div>
-        <div className="absolute bottom-10 left-1/4 w-72 h-72 bg-indigo-500 rounded-full opacity-10 animate-pulse filter blur-3xl"></div>
-      </div>
-
-      <div className="relative z-10 max-w-md w-full">
-        {/* Main card with 3D effect */}
-        <div className="bg-white bg-opacity-10 backdrop-blur-lg rounded-3xl shadow-2xl border border-white border-opacity-20 p-8 transform hover:scale-105 transition-all duration-300">
-          {/* Floating shield icon */}
-          <div className="absolute -top-8 left-1/2 transform -translate-x-1/2">
-            <div className="w-16 h-16 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full flex items-center justify-center shadow-xl animate-bounce">
-              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8" style={{ backgroundColor: '#f8f9fa' }}>
+      <div className="max-w-md w-full">
+        {/* Main card with clean, classic design */}
+        <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-8">
+          {/* Header with shield icon */}
+          <div className="text-center mb-8">
+            <div className="mx-auto w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
+              <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
               </svg>
             </div>
-          </div>
-
-          {/* Header section */}
-          <div className="text-center mb-8 mt-6">
-            <h2 className="text-3xl font-bold text-white mb-3 tracking-wide">
+            
+            <h2 className="text-2xl font-semibold text-gray-800 mb-3">
               Verify Your Account
             </h2>
-            <p className="text-cyan-200 text-sm opacity-80 leading-relaxed">
+            <p className="text-gray-600 text-sm mb-2">
               We've sent a 5-digit verification code to
             </p>
-            <p className="text-white font-medium text-sm mt-1">
+            <p className="text-gray-800 font-medium text-sm">
               {email || 'your email address'}
             </p>
-            {/* Display user details for verification */}
+            
             {name && (
-              <div className="mt-3 text-xs text-cyan-200 opacity-80">
-                <p>Verifying account for: <span className="font-medium text-white">{name}</span></p>
+              <div className="mt-3 text-xs text-gray-500">
+                <p>Verifying account for: <span className="font-medium text-gray-700">{name}</span></p>
               </div>
             )}
           </div>
 
-          {/* Error message with glass effect */}
+          {/* Error message */}
           {error && (
-            <div className="mb-6 p-4 bg-red-500 bg-opacity-20 backdrop-blur-sm border border-red-400 border-opacity-30 text-red-200 rounded-xl shadow-lg animate-shake">
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-md">
               <div className="flex items-center">
-                <svg className="w-5 h-5 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <svg className="w-5 h-5 mr-3 flex-shrink-0 text-red-500" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                 </svg>
                 <span className="text-sm">{error}</span>
@@ -179,11 +169,11 @@ const VerifyOtpForm: React.FC = () => {
             </div>
           )}
 
-          {/* Success message with glass effect */}
+          {/* Success message */}
           {success && (
-            <div className="mb-6 p-4 bg-green-500 bg-opacity-20 backdrop-blur-sm border border-green-400 border-opacity-30 text-green-200 rounded-xl shadow-lg animate-pulse">
+            <div className="mb-6 p-4 bg-green-50 border border-green-200 text-green-700 rounded-md">
               <div className="flex items-center">
-                <svg className="w-5 h-5 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <svg className="w-5 h-5 mr-3 flex-shrink-0 text-green-500" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                 </svg>
                 <span className="text-sm">{success}</span>
@@ -191,74 +181,60 @@ const VerifyOtpForm: React.FC = () => {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-8">
-            {/* OTP Input Fields with 3D effect */}
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* OTP Input Fields */}
             <div className="flex justify-center gap-3 mb-8">
               {otp.map((digit, index) => (
-                <div key={index} className="relative group">
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={1}
-                    value={digit}
-                    onChange={(e) => handleChange(index, e.target.value)}
-                    onKeyDown={(e) => handleKeyDown(index, e)}
-                    ref={(el) => (inputRefs.current[index] = el)}
-                    className="w-14 h-16 text-center text-2xl font-bold bg-white bg-opacity-10 backdrop-blur-sm border-2 border-white border-opacity-20 rounded-2xl text-white placeholder-cyan-300 focus:outline-none focus:ring-4 focus:ring-cyan-400 focus:ring-opacity-50 focus:border-cyan-400 transition-all duration-300 hover:bg-opacity-20 shadow-lg transform hover:scale-110"
-                    required
-                  />
-                  {/* Floating gradient effect */}
-                  <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-500 opacity-0 group-hover:opacity-20 transition-opacity duration-300 pointer-events-none"></div>
-                  {/* Active state glow */}
-                  {digit && (
-                    <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-cyan-400 to-blue-400 opacity-30 animate-pulse pointer-events-none"></div>
-                  )}
-                </div>
+                <input
+                  key={index}
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={1}
+                  value={digit}
+                  onChange={(e) => handleChange(index, e.target.value)}
+                  onKeyDown={(e) => handleKeyDown(index, e)}
+                  ref={(el) => (inputRefs.current[index] = el)}
+                  className="w-12 h-14 text-center text-xl font-semibold bg-white border-2 border-gray-300 rounded-md text-gray-800 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors duration-200 hover:border-gray-400"
+                  required
+                />
               ))}
             </div>
 
-            {/* Submit button with 3D effect */}
+            {/* Submit button */}
             <div className="space-y-4">
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold py-4 px-6 rounded-2xl shadow-lg hover:shadow-2xl transform hover:scale-105 transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-cyan-400 focus:ring-opacity-50 relative overflow-hidden group disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                className="w-full bg-red-600 text-white font-semibold py-3 px-6 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <span className="relative z-10 flex items-center justify-center">
-                  {isLoading ? (
-                    <>
-                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Verifying...
-                    </>
-                  ) : (
-                    'Verify OTP'
-                  )}
-                </span>
-                <div className="absolute inset-0 bg-gradient-to-r from-cyan-700 to-blue-700 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                {isLoading ? (
+                  <div className="flex items-center justify-center">
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Verifying...
+                  </div>
+                ) : (
+                  'Verify OTP'
+                )}
               </button>
 
               {/* Resend OTP button */}
               <button
                 type="button"
                 onClick={handleResendOtp}
-                className="w-full bg-white bg-opacity-10 backdrop-blur-sm border border-white border-opacity-20 text-cyan-200 font-medium py-3 px-6 rounded-2xl hover:bg-opacity-20 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-opacity-50"
+                className="w-full bg-white border border-gray-300 text-gray-700 font-medium py-3 px-6 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors duration-200"
               >
                 Didn't receive the code? Resend OTP
               </button>
             </div>
           </form>
-
-          {/* Decorative floating elements */}
-          <div className="absolute -bottom-6 -right-6 w-24 h-24 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full opacity-10 animate-ping"></div>
-          <div className="absolute -top-6 -left-6 w-20 h-20 bg-gradient-to-r from-indigo-500 to-cyan-500 rounded-full opacity-10 animate-pulse"></div>
         </div>
 
         {/* Bottom helper text */}
         <div className="text-center mt-6">
-          <p className="text-cyan-300 text-sm opacity-70">
+          <p className="text-gray-600 text-sm">
             Enter the 5-digit code sent to your email
           </p>
         </div>
