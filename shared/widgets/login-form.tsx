@@ -1,92 +1,105 @@
-"use client";
-
-import { useState, useEffect } from 'react';
-import { Eye, EyeOff, Mail, Lock, Globe, ArrowRight, Shield } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { loginUserAction } from '../../actions/auth';
-import { useActionState } from 'react';
-import type { LoginState } from '@/types/auth'; 
-
-// Default initial state
-const initialState: LoginState = {
-  error: '',
-  success: false,
-  message: null,
-  redirect: '/dashboard', // fallback or default
-  isPending: false,
-};
+"use client"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { Mail, Lock, Eye, EyeOff, ArrowRight, Globe, Shield } from 'lucide-react'
+import { useAuth } from '../../contexts/AuthContext'
 
 function LoginFormContent() {
-  const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
-  const [formActive, setFormActive] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [emailError, setEmailError] = useState('');
-  const [passwordError, setPasswordError] = useState('');
-  const [clientValidationFailed, setClientValidationFailed] = useState(false);
-
-  const router = useRouter();
-  const [state, formAction] = useActionState(loginUserAction, initialState);
-
-  // Trigger redirect when login is successful
-  useEffect(() => {
-    if (state.success && state.redirect) {
-      const timer = setTimeout(() => {
-        router.push(state.redirect);
-      }, 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [state.success, state.redirect, router]);
+  const [showPassword, setShowPassword] = useState(false)
+  const [rememberMe, setRememberMe] = useState(false)
+  const [formActive, setFormActive] = useState(false)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [emailError, setEmailError] = useState('')
+  const [passwordError, setPasswordError] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+  
+  const router = useRouter()
+  const { login } = useAuth()
 
   // Activate animations after mount
   useEffect(() => {
-    setFormActive(true);
-  }, []);
+    setFormActive(true)
+  }, [])
 
   const togglePasswordVisibility = () => {
-    setShowPassword(!showPassword);
-  };
+    setShowPassword(!showPassword)
+  }
 
   // Client-side validation
   const validateEmail = (email: string) => {
-    const regex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    const regex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
     if (!email) {
-      setEmailError('Email is required');
-      return false;
+      setEmailError('Email is required')
+      return false
     } else if (!regex.test(email)) {
-      setEmailError('Invalid email address');
-      return false;
+      setEmailError('Invalid email address')
+      return false
     }
-    setEmailError('');
-    return true;
-  };
+    setEmailError('')
+    return true
+  }
 
   const validatePassword = (password: string) => {
     if (!password) {
-      setPasswordError('Password is required');
-      return false;
+      setPasswordError('Password is required')
+      return false
     } else if (password.length < 6) {
-      setPasswordError('Password must be at least 6 characters');
-      return false;
+      setPasswordError('Password must be at least 6 characters')
+      return false
     }
-    setPasswordError('');
-    return true;
-  };
+    setPasswordError('')
+    return true
+  }
 
-  const handleClientValidation = (e: React.FormEvent) => {
-    const emailValid = validateEmail(email);
-    const passwordValid = validatePassword(password);
+  // ✅ Updated form submission handler with proper error handling
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    // Clear previous messages
+    setError('')
+    setSuccess('')
+    
+    // Validate inputs
+    const emailValid = validateEmail(email)
+    const passwordValid = validatePassword(password)
+    
     if (!emailValid || !passwordValid) {
-      e.preventDefault();
-      setClientValidationFailed(true);
-    } else {
-      setClientValidationFailed(false);
+      return
     }
-  };
+
+    setIsLoading(true)
+
+    try {
+      const result = await login(email, password)
+      
+      if (result.success) {
+        setSuccess('Login successful! Redirecting...')
+        
+        // ✅ Small delay to show success message, then redirect
+        setTimeout(() => {
+          if (result.redirect) {
+            router.push(result.redirect)
+          } else {
+            router.push('/dashboard')
+          }
+        }, 1000)
+      } else {
+        // ✅ Handle login failure
+        setError(result.error || 'Login failed. Please try again.')
+      }
+    } catch (error: any) {
+      console.error('Login form error:', error)
+      setError('An unexpected error occurred. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   return (
-    <form action={formAction} onSubmit={handleClientValidation} className="px-8 py-10 relative">
+    <form onSubmit={handleSubmit} className="px-8 py-10 relative">
       {/* Email Field */}
       <div
         className={`mb-6 relative transition-all duration-700 ease-out 
@@ -110,14 +123,15 @@ function LoginFormContent() {
             type="email"
             value={email}
             onChange={(e) => {
-              setEmail(e.target.value);
-              validateEmail(e.target.value);
+              setEmail(e.target.value)
+              validateEmail(e.target.value)
             }}
             className="w-full pl-10 pr-3 py-3 bg-white text-gray-800 border-2 border-gray-200 
               rounded-xl outline-none transition-all duration-300 focus:border-red-500
               focus:shadow-[0_0_20px_rgba(239,68,68,0.2)] focus:bg-red-50/50"
             placeholder="employee@telecel.lr"
             required
+            disabled={isLoading}
           />
         </div>
         {emailError && (
@@ -151,20 +165,22 @@ function LoginFormContent() {
             type={showPassword ? 'text' : 'password'}
             value={password}
             onChange={(e) => {
-              setPassword(e.target.value);
-              validatePassword(e.target.value);
+              setPassword(e.target.value)
+              validatePassword(e.target.value)
             }}
             className="w-full pl-10 pr-12 py-3 bg-white text-gray-800 border-2 border-gray-200 
               rounded-xl outline-none transition-all duration-300 focus:border-red-500
               focus:shadow-[0_0_20px_rgba(239,68,68,0.2)] focus:bg-red-50/50"
             placeholder="••••••••"
             required
+            disabled={isLoading}
           />
           <button
             type="button"
             onClick={togglePasswordVisibility}
             className="absolute right-3 text-gray-500 hover:text-red-600 focus:outline-none 
               transition-all duration-300 transform hover:scale-110"
+            disabled={isLoading}
           >
             {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
           </button>
@@ -190,6 +206,7 @@ function LoginFormContent() {
               focus:ring-offset-white bg-white"
             checked={rememberMe}
             onChange={() => setRememberMe(!rememberMe)}
+            disabled={isLoading}
           />
           <span className="ml-2 transition-colors duration-300 group-hover:text-gray-800">Remember me</span>
         </label>
@@ -206,12 +223,12 @@ function LoginFormContent() {
       {/* Submit Button */}
       <button
         type="submit"
-        disabled={state.isPending || clientValidationFailed}
+        disabled={isLoading}
         className={`w-full py-3 rounded-xl font-medium text-white
           transition-all duration-500 ease-out transform
           ${formActive ? 'translate-y-0 opacity-100 delay-300' : 'translate-y-10 opacity-0'}
           ${
-            state.isPending || clientValidationFailed
+            isLoading
               ? 'bg-gray-400 cursor-not-allowed'
               : 'bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 hover:shadow-lg hover:shadow-red-500/30 active:scale-[0.98]'
           }
@@ -220,7 +237,7 @@ function LoginFormContent() {
           before:transition-transform before:duration-700 before:skew-x-12
         `}
       >
-        {state.isPending ? (
+        {isLoading ? (
           <div className="flex items-center justify-center">
             <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin mr-3"></div>
             Connecting...
@@ -234,22 +251,22 @@ function LoginFormContent() {
       </button>
 
       {/* Error Message */}
-      {state.error && (
+      {error && (
         <p className="text-red-500 text-sm mt-4 animate-pulse flex items-center">
           <div className="w-1 h-1 bg-red-500 rounded-full mr-2 animate-ping"></div>
-          {state.error}
+          {error}
         </p>
       )}
 
       {/* Success Message */}
-      {state.success && state.message && (
+      {success && (
         <p className="text-green-600 text-sm mt-4 animate-pulse flex items-center">
           <div className="w-1 h-1 bg-green-600 rounded-full mr-2 animate-ping"></div>
-          {state.message}
+          {success}
         </p>
       )}
     </form>
-  );
+  )
 }
 
 export default function LoginForm() {
@@ -261,7 +278,7 @@ export default function LoginForm() {
         <div className="absolute top-3/4 right-1/4 w-1 h-1 bg-red-500/20 rounded-full animate-pulse"></div>
         <div className="absolute bottom-1/4 left-1/2 w-1.5 h-1.5 bg-red-300/20 rounded-full animate-bounce"></div>
       </div>
-
+      
       <div className="bg-white/90 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-200/60 
         overflow-hidden hover:shadow-red-500/10 transition-all duration-500">
         
@@ -278,15 +295,15 @@ export default function LoginForm() {
             <p className="text-red-100 text-sm">Access your Telecel Liberia account</p>
           </div>
         </div>
-
+        
         <LoginFormContent />
       </div>
-
+      
       {/* Security Notice */}
       <div className="mt-6 text-center text-sm text-gray-600 flex items-center justify-center">
         <Shield className="w-4 h-4 mr-2 text-red-600" />
         <span>Protected by enterprise-grade security</span>
       </div>
     </div>
-  );
+  )
 }

@@ -1,9 +1,16 @@
 "use client"
 import type React from "react"
-import { createContext, useContext, useEffect, useState } from "react"
+import { createContext, useContext, useEffect, useState, useCallback } from "react"
 import { useDispatch } from "react-redux"
 import { setUser } from "../store/slices/authSlice"
 import { checkAuthStatus, loginUserAction, logoutAction, getClientToken } from "../actions/auth"
+
+// ✅ Define the login result type
+interface LoginResult {
+  success: boolean
+  redirect?: string
+  error?: string
+}
 
 interface AuthContextType {
   token: string | null
@@ -11,8 +18,9 @@ interface AuthContextType {
   isAuthenticated: boolean
   loading: boolean
   error: string | null
-  login: (email: string, password: string) => Promise<void>
+  login: (email: string, password: string) => Promise<LoginResult> // ✅ Fixed return type
   logout: () => void
+  refreshAuthState: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -42,99 +50,111 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return null
   }
 
-  useEffect(() => {
-    const initializeAuth = async () => {
-      setLoading(true)
-      setError(null)
-      console.log("AuthContext: Initializing auth check...")
-
-      try {
-        // ✅ First, try to get the token to see if we have valid cookies
-        const clientToken = await fetchTokenWithRetry(2, 300)
-        
-        if (!clientToken) {
-          console.log("AuthContext: No valid token found, user not authenticated")
-          setUserState(null)
-          setIsAuthenticated(false)
-          setToken(null)
-          setError(null) // ✅ Don't set error for normal unauthenticated state
-          setLoading(false)
-          return
-        }
-
-        // ✅ If we have a token, check auth status
-        const authStatus = await checkAuthStatus()
-        console.log("AuthContext: Auth status:", authStatus)
-
-        if (authStatus.isAuthenticated && authStatus.user) {
-          setUserState(authStatus.user)
-          dispatch(setUser(authStatus.user))
-          setIsAuthenticated(true)
-          setToken(clientToken)
-          setError(null)
-          console.log("AuthContext: User authenticated successfully:", authStatus.user.email)
-        } else {
-          console.log("AuthContext: Auth check failed:", authStatus.error)
-          setUserState(null)
-          setIsAuthenticated(false)
-          setToken(null)
-          setError(null) // ✅ Don't show error for failed auth check
-        }
-      } catch (error: any) {
-        console.error("AuthContext: Failed to initialize auth:", error)
+  // ✅ Extract auth initialization into reusable function
+  const initializeAuth = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true)
+    setError(null)
+    console.log("AuthContext: Initializing auth check...")
+    
+    try {
+      // ✅ First, try to get the token to see if we have valid cookies
+      const clientToken = await fetchTokenWithRetry(3, 300)
+              
+      if (!clientToken) {
+        console.log("AuthContext: No valid token found, user not authenticated")
         setUserState(null)
         setIsAuthenticated(false)
         setToken(null)
-        setError(null) // ✅ Don't show error during initialization
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    initializeAuth()
-  }, [dispatch])
-
-  const login = async (email: string, password: string) => {
-    setLoading(true)
-    setError(null)
-    
-    try {
-      console.log("AuthContext: Attempting login for:", email)
-      const formData = new FormData()
-      formData.append("email", email)
-      formData.append("password", password)
-
-      const response = await loginUserAction({ error: "", success: false, message: null }, formData)
-      console.log("AuthContext: Login response:", response)
-
-      if (!response.success) {
-        throw new Error(response.error || "Login failed")
+        setError(null)
+        if (showLoading) setLoading(false)
+        return
       }
 
-      // ✅ Wait longer for cookies to be properly set
-      await new Promise(resolve => setTimeout(resolve, 1500))
-
-      // ✅ Re-initialize auth state after successful login
-      const clientToken = await fetchTokenWithRetry(5, 500)
-      if (!clientToken) {
-        throw new Error("Failed to get access token after login")
-      }
-
+      // ✅ If we have a token, check auth status
       const authStatus = await checkAuthStatus()
+      console.log("AuthContext: Auth status:", authStatus)
+      
       if (authStatus.isAuthenticated && authStatus.user) {
         setUserState(authStatus.user)
         dispatch(setUser(authStatus.user))
         setIsAuthenticated(true)
         setToken(clientToken)
         setError(null)
-        console.log("AuthContext: Login successful, user authenticated")
+        console.log("AuthContext: User authenticated successfully:", authStatus.user.email)
       } else {
-        throw new Error("Failed to fetch user data after login")
+        console.log("AuthContext: Auth check failed:", authStatus.error)
+        setUserState(null)
+        setIsAuthenticated(false)
+        setToken(null)
+        setError(null)
       }
+    } catch (error: any) {
+      console.error("AuthContext: Failed to initialize auth:", error)
+      setUserState(null)
+      setIsAuthenticated(false)
+      setToken(null)
+      setError(null)
+    } finally {
+      if (showLoading) setLoading(false)
+    }
+  }, [dispatch])
+
+  // ✅ Add method to refresh auth state without showing loading
+  const refreshAuthState = useCallback(async () => {
+    await initializeAuth(false)
+  }, [initializeAuth])
+
+  useEffect(() => {
+    initializeAuth()
+  }, [initializeAuth])
+
+  // ✅ Fixed login method with proper return type
+  const login = async (email: string, password: string): Promise<LoginResult> => {
+    setLoading(true)
+    setError(null)
+        
+    try {
+      console.log("AuthContext: Attempting login for:", email)
+      const formData = new FormData()
+      formData.append("email", email)
+      formData.append("password", password)
+      
+      const response = await loginUserAction({ error: "", success: false, message: null }, formData)
+      console.log("AuthContext: Login response:", response)
+      
+      if (!response.success) {
+        return {
+          success: false,
+          error: response.error || "Login failed"
+        }
+      }
+
+      // ✅ Wait for cookies to be set, then refresh auth state
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      // ✅ Refresh auth state after successful login
+      await initializeAuth(false)
+      
+      // ✅ Verify we're actually authenticated before returning success
+      if (!isAuthenticated) {
+        // Try one more time with longer delay
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        await initializeAuth(false)
+      }
+      
+      console.log("AuthContext: Login successful, user authenticated")
+      return { 
+        success: true, 
+        redirect: response.redirect || "/dashboard"
+      }
+      
     } catch (error: any) {
       console.error("AuthContext: Login error:", error)
       setError(error.message)
-      throw error
+      return {
+        success: false,
+        error: error.message || "Login failed"
+      }
     } finally {
       setLoading(false)
     }
@@ -164,6 +184,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         error,
         login,
         logout,
+        refreshAuthState,
       }}
     >
       {children}
