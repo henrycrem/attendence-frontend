@@ -51,6 +51,13 @@ export const ERROR_MESSAGES = {
   DEPARTMENT_FETCH_FAILED: "Unable to load departments. Please refresh the page and try again.",
   FORM_VALIDATION_ERROR: "Please check all required fields and correct any errors.",
   REGISTRATION_SUCCESS: "User registered successfully! Redirecting...",
+  
+  // Additional Specific Errors
+  AUTH_ERROR: "Authentication failed. Please check your credentials.",
+  SESSION_EXPIRED: "Your session has expired. Please log in again.",
+  ACCESS_DENIED: "Access denied. You do not have permission to perform this action.",
+  NOT_FOUND: "Resource not found.",
+  RATE_LIMIT_EXCEEDED: "Too many requests. Please try again later.",
 } as const
 
 // ✅ Error classification function
@@ -172,6 +179,23 @@ export function classifyError(error: string | Error): keyof typeof ERROR_MESSAGE
     return 'REGISTRATION_SUCCESS'
   }
   
+  // Additional Specific Errors
+  if (errorMessage.includes('authentication failed')) {
+    return 'AUTH_ERROR'
+  }
+  if (errorMessage.includes('session expired')) {
+    return 'SESSION_EXPIRED'
+  }
+  if (errorMessage.includes('access denied')) {
+    return 'ACCESS_DENIED'
+  }
+  if (errorMessage.includes('resource not found')) {
+    return 'NOT_FOUND'
+  }
+  if (errorMessage.includes('too many requests')) {
+    return 'RATE_LIMIT_EXCEEDED'
+  }
+  
   // Default fallback
   return 'UNKNOWN_ERROR'
 }
@@ -222,4 +246,61 @@ export const errorHandlers = {
   // ✅ New location error handler
   location: (error: string | Error, showToast = true) =>
     handleError(error, { showToast, context: 'Location Services', toastType: 'warning' }),
+  
+  // Additional Specific Error Handlers
+  validation: (error: string | Error, showToast = true) => {
+    const message = handleError(error, false); // Handle internally first
+    const errorKey = classifyError(error);
+
+    if (showToast) {
+      switch (errorKey) {
+        case "VALIDATION_ERROR":
+          toast.error(message);
+          break;
+        case "NOT_FOUND":
+          toast.warning(message);
+          break;
+        default:
+          toast.error(message);
+          break;
+      }
+    }
+    return message;
+  },
+  
+  session: (error: string | Error, showToast = true) => {
+    const message = handleError(error, false); // Handle internally first
+    const errorKey = classifyError(error);
+
+    if (showToast) {
+      switch (errorKey) {
+        case "SESSION_EXPIRED":
+          toast.warning(message);
+          // Optionally redirect to login
+          // router.push('/login');
+          break;
+        default:
+          toast.error(message);
+          break;
+      }
+    }
+    return message;
+  },
+  
+  rateLimit: (error: string | Error, showToast = true) => {
+    const message = handleError(error, false); // Handle internally first
+    const errorKey = classifyError(error);
+
+    if (showToast) {
+      switch (errorKey) {
+        case "RATE_LIMIT_EXCEEDED":
+          toast.warning(message);
+          break;
+        default:
+          toast.error(message);
+          break;
+      }
+    }
+    return message;
+  },
 }
