@@ -14,7 +14,7 @@ class AuthenticationError extends Error {
   }
 }
 // Re-using existing auth and fetch helpers from actions/dashboard.ts
-// You might need to adjust paths if these are not globally available or move them to a shared lib folder
+// You might need to adjust paths if these are not globally available or move them to a shared lib folder in the directory included
 const getAuthHeaders = async () => {
   const cookieStore = await cookies()
   const accessToken = cookieStore.get("access_token")?.value
