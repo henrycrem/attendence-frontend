@@ -144,7 +144,7 @@ export default function AppSidebar({ user, error }: SidebarProps) {
               isExpanded={expandedSections.reports}
               onToggle={() => toggleSection("reports")}
             >
-              <NavItem href="/dashboard/reports" icon={<FileText size={18} />} label="Attendance Reports" />
+              <NavItem href="/dashboard/attendance-report" icon={<FileText size={18} />} label="Attendance Reports" />
               
             </Section>
           )}
