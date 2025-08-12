@@ -1,9 +1,10 @@
 "use client";
 import { useState, useEffect } from "react";
-import { Clock, Calendar, CheckCircle, Timer, MapPin, RefreshCw, AlertCircle, WifiOff } from 'lucide-react';
+import { Clock, Calendar, CheckCircle, Timer, MapPin, RefreshCw, AlertCircle, WifiOff, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { getEmployeeAttendanceData } from '@/actions/dashboard';
 import { errorHandlers } from '@/errorHandler';
+import Link from 'next/link';
 
 interface AttendanceData {
   today: {
@@ -126,6 +127,30 @@ export default function AttendanceSummaryCard() {
     }
   };
 
+  // Get button text and style based on attendance status
+  const getClockButtonProps = () => {
+    if (!attendanceData) return { text: 'Clock In', className: 'bg-red-800 hover:bg-red-900' };
+    
+    const { status, clockIn, clockOut } = attendanceData.today;
+    
+    if (status === 'Completed') {
+      return { 
+        text: 'View Details', 
+        className: 'bg-green-600 hover:bg-green-700' 
+      };
+    } else if (status === 'Checked In') {
+      return { 
+        text: 'Clock Out', 
+        className: 'bg-orange-600 hover:bg-orange-700' 
+      };
+    } else {
+      return { 
+        text: 'Clock In', 
+        className: 'bg-blue-600 hover:bg-blue-700' 
+      };
+    }
+  };
+
   // ✅ Enhanced loading state
   if (loading && !attendanceData) {
     return (
@@ -174,7 +199,7 @@ export default function AttendanceSummaryCard() {
               <button 
                 onClick={handleRetry}
                 disabled={loading || !isOnline}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                className="px-6 py-2 bg-red-900 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
               >
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 <span>{loading ? 'Retrying...' : 'Try Again'}</span>
@@ -211,6 +236,8 @@ export default function AttendanceSummaryCard() {
 
   if (!attendanceData) return null;
 
+  const clockButtonProps = getClockButtonProps();
+
   return (
     <div className="mb-8">
       {/* Connection Status Indicator */}
@@ -225,31 +252,43 @@ export default function AttendanceSummaryCard() {
       <div className={`bg-white/95 backdrop-blur-sm rounded-xl shadow-sm border border-gray-200 p-6 mb-6 transition-all duration-700 ${
         isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
       }`}>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold text-gray-800 mb-1">My Attendance</h2>
             <p className="text-sm text-gray-600">Track your daily attendance</p>
           </div>
-          <div className="flex items-center space-x-4">
-            <button
-              onClick={fetchAttendanceData}
-              disabled={loading}
-              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
-              title="Refresh data"
+          <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-3 sm:space-y-0 sm:space-x-4 w-full lg:w-auto">
+            {/* Clock In/Out Button - Responsive */}
+            <Link 
+              href="/dashboard/attendence/clock-in"
+              className={`${clockButtonProps.className} text-white font-semibold px-6 py-3 rounded-lg shadow-sm transition-all duration-200 hover:shadow-md transform hover:scale-[1.02] flex items-center justify-center space-x-2 w-full sm:w-auto min-w-[140px] group`}
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            </button>
-            <div className="text-right">
-              <div className="text-2xl font-bold text-gray-800">
-                {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
-              </div>
-              <div className="text-sm text-gray-600">
-                {currentTime.toLocaleDateString([], {
-                  weekday: 'long',
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric'
-                })}
+              <Clock className="w-4 h-4" />
+              <span>{clockButtonProps.text}</span>
+              <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+            </Link>
+            
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={fetchAttendanceData}
+                disabled={loading}
+                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+                title="Refresh data"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              </button>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-gray-800">
+                  {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
+                </div>
+                <div className="text-sm text-gray-600">
+                  {currentTime.toLocaleDateString([], {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  })}
+                </div>
               </div>
             </div>
           </div>
@@ -275,7 +314,7 @@ export default function AttendanceSummaryCard() {
           </div>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
           <div className="bg-gray-50 rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-gray-600 text-sm">Clock In</span>

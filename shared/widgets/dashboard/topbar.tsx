@@ -145,7 +145,7 @@ export default function TopBar({ user, error, onMenuClick }: TopBarProps) {
       {/* Overlay for User Sheet */}
       {isUserSheetOpen && (
   <div
-    className="fixed inset-0 bg-black bg-opacity-20 z-30 lg:hidden"
+    className="fixed inset-0  bg-opacity-20 z-30 lg:hidden"
     onClick={closeSheet}
     aria-hidden="true"
   />
