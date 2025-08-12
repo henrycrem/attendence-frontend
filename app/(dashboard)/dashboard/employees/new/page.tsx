@@ -1,6 +1,8 @@
 import EmployeeForm from "@/components/employee/employee-form"
 import { getAllUsersAction } from "@/actions/user"
 
+export const dynamic = "force-dynamic"
+
 type UserOption = {
   id: string
   name: string
