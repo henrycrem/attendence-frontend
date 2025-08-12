@@ -269,8 +269,8 @@ export default function AttendanceStats() {
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
-            <div className="text-right">
-              <div className="text-2xl font-bold text-gray-800">
+            <div className="text-right text-red-900">
+              <div className="text-2xl font-bold text-red-900">
                 {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
               </div>
               <div className="text-sm text-gray-600">

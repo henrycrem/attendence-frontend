@@ -1,9 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { User, Menu, X, LogOut, Clock } from "lucide-react"
 import EmployeeSearch from "@/components/employee-search"
+import Link from "next/link"
 
 interface TopBarProps {
   user: any
@@ -28,7 +29,14 @@ const getAvatarUrl = (avatarPath: string | null | undefined): string => {
 
 export default function TopBar({ user, error, onMenuClick }: TopBarProps) {
   const [isUserSheetOpen, setIsUserSheetOpen] = useState(false)
+    const [isVisible, setIsVisible] = useState(false);
+   const [currentTime, setCurrentTime] = useState(new Date());
+   const [isOnline, setIsOnline] = useState(true);
+   
   const router = useRouter()
+
+
+
 
   const toggleUserSheet = () => {
     setIsUserSheetOpen(!isUserSheetOpen)
@@ -47,6 +55,8 @@ export default function TopBar({ user, error, onMenuClick }: TopBarProps) {
     }
   }
 
+
+
   if (error) {
     return (
       <div className="flex items-center justify-center p-4 bg-red-50 border-b border-red-200 relative z-40">
@@ -55,12 +65,7 @@ export default function TopBar({ user, error, onMenuClick }: TopBarProps) {
     )
   }
 
-  // Get current time
-  const currentTime = new Date().toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  })
+             
 
   // Determine what to show in center section based on user role
   const renderCenterSection = () => {
@@ -104,7 +109,7 @@ export default function TopBar({ user, error, onMenuClick }: TopBarProps) {
             className={`items-center space-x-2 ${user?.role?.roleName === "super_admin" ? "hidden lg:flex" : "flex"}`}
           >
             <Clock size={16} className="sm:w-5 sm:h-5 text-gray-500 flex-shrink-0" />
-            <span className="text-xs sm:text-sm font-medium text-gray-600 whitespace-nowrap">{currentTime}</span>
+            <span className="text-xs sm:text-sm font-medium text-red-900 whitespace-nowrap"> {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
           </div>
         </div>
 
@@ -138,17 +143,23 @@ export default function TopBar({ user, error, onMenuClick }: TopBarProps) {
       </div>
 
       {/* Overlay for User Sheet */}
-      {isUserSheetOpen && <div className="fixed inset-0 mobile-zindex  lg:bg-transparent" onClick={closeSheet} />}
+      {isUserSheetOpen && (
+  <div
+    className="fixed inset-0 bg-black bg-opacity-20 z-30 lg:hidden"
+    onClick={closeSheet}
+    aria-hidden="true"
+  />
+)}
 
       {/* User Profile Sheet */}
-      
-      <div
-        className={`fixed right-2 sm:right-4 top-14 sm:top-16 w-72 sm:w-80 bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-gray-200 z-40 overflow-hidden transition-all duration-300 transform ${
-          isUserSheetOpen
-            ? "translate-y-0 opacity-100 scale-100 pointer-events-auto"
-            : "translate-y-2 opacity-0 scale-95 pointer-events-none"
-        }`}
-      >
+
+    <div
+          className={`fixed right-2 sm:right-4 top-14 sm:top-16 w-72 sm:w-80 bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-gray-200 z-50 overflow-hidden transition-all duration-300 transform ${
+            isUserSheetOpen
+              ? "translate-y-0 opacity-100 scale-100 pointer-events-auto"
+              : "translate-y-2 opacity-0 scale-95 pointer-events-none"
+          }`}
+        >
         <div className="relative p-4 sm:p-6">
           <button
             onClick={closeSheet}
@@ -177,13 +188,14 @@ export default function TopBar({ user, error, onMenuClick }: TopBarProps) {
 
           {/* User Menu */}
           <div className="space-y-2">
-            <a
-              href="/dashboard/profile"
-              className="flex items-center px-3 sm:px-4 py-2 sm:py-3 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors duration-200"
-            >
-              <User size={16} className="mr-3 text-gray-500" />
-              <span>View Profile</span>
-            </a>
+            <Link
+                  href="/dashboard/profile"
+                  onClick={closeSheet}
+                  className="flex items-center px-3 sm:px-4 py-2 sm:py-3 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors duration-200 cursor-pointer"
+                >
+                  <User size={16} className="mr-3 text-gray-500" />
+                  <span>View Profile</span>
+                </Link>
             <button
               onClick={handleLogout}
               className="flex cursor-pointer items-center px-3 sm:px-4 py-2 sm:py-3 text-sm text-red-600 hover:bg-red-50 rounded-lg w-full text-left transition-colors duration-200"

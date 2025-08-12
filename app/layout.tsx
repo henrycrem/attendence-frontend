@@ -14,9 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Attendence Tracking Platfrom",
+  title: "TechTrack - Attendance Management System",
 
-  description: "This is an attendence tracking application to enable Telecel Liberia employees, to record attendence remotly",
+  description: "Comprehensive attendance management system for Telecel Liberia",
   
   authors: [
     {
@@ -39,8 +39,7 @@ export const metadata: Metadata = {
  
   icons: {
     icon: "/favicon.ico",
-    shortcut: "/favicon-16x16.png",
-    apple: "/apple-touch-icon.png",
+   
   },
 
 };
