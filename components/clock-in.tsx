@@ -1,13 +1,13 @@
-'use client'
+"use client"
+
 import { useState, useEffect } from "react"
-import { MapPin, Clock, CheckCircle, XCircle, Wifi, WifiOff } from 'lucide-react'
+import { MapPin, Clock, CheckCircle, XCircle } from 'lucide-react'
 import { checkIn, checkOut, getTodayAttendance } from "@/actions/attendence"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { formatTime, formatDate } from "@/lib/attendance-utils"
-import { errorHandlers, ERROR_MESSAGES } from "@/errorHandler" // Import error handlers
-import { toast } from "sonner" // Import toast
+import { errorHandlers } from "@/errorHandler"
+import { toast } from "sonner"
 
 interface SimpleAttendanceClockProps {
   userId: string
@@ -26,7 +26,6 @@ export default function SimpleAttendanceClock({
   const [hasCheckedInToday, setHasCheckedInToday] = useState(false)
   const [hasCheckedOutToday, setHasCheckedOutToday] = useState(false)
   const [locationStatus, setLocationStatus] = useState<'checking' | 'good' | 'poor' | 'failed'>('checking')
-  const [networkStatus, setNetworkStatus] = useState<'online' | 'offline' | 'checking'>('online')
 
   // Fetch today's attendance
   useEffect(() => {
@@ -34,337 +33,177 @@ export default function SimpleAttendanceClock({
       try {
         const response = await getTodayAttendance(userId)
         setAttendance(response.data)
-
-        // Check what actions have been done today
-        if (response.data) {
-          setHasCheckedInToday(!!response.data.signInTime)
-          setHasCheckedOutToday(!!response.data.signOutTime)
-        } else {
-          setHasCheckedInToday(false)
-          setHasCheckedOutToday(false)
-        }
+        setHasCheckedInToday(!!response.data?.signInTime)
+        setHasCheckedOutToday(!!response.data?.signOutTime)
       } catch (err: any) {
-        console.error("Failed to fetch today's attendance:", err)
-        errorHandlers.network(err, true) // Use error handler with toast
+        console.error("Failed to fetch attendance:", err)
+        toast.error(err.message || "Failed to load attendance")
       }
     }
     fetchTodayAttendance()
   }, [userId])
 
-  // ✅ Enhanced location function with proper GPS quality check and IP fallback
-  const getCurrentLocation = (): Promise<{ latitude: number, longitude: number, accuracy: number, method: 'gps' | 'ip' }> => {
-    return new Promise(async (resolve, reject) => {
+  // ✅ Get GPS location — NO IP FALLBACK
+  const getCurrentLocation = (): Promise<{ latitude: number, longitude: number, accuracy: number, method: 'gps' }> => {
+    return new Promise((resolve, reject) => {
       setLocationStatus('checking')
 
       if (!navigator.geolocation) {
-        console.log("GPS not supported, falling back to IP location")
         setLocationStatus('failed')
-        try {
-          // Directly get IP location if GPS not supported
-          const ipLocation = await getIPLocationFallback()
-          setLocationStatus('poor')
-          resolve({
-            latitude: ipLocation.latitude,
-            longitude: ipLocation.longitude,
-            accuracy: ipLocation.accuracy,
-            method: 'ip'
-          })
-        } catch (ipError: any) {
-          // If IP fallback also fails
-          setLocationStatus('failed')
-          reject(new Error("All IP location services failed")) // This string will be classified by errorHandler
-        }
-        return
+        return reject(new Error("GPS not supported on this device"))
       }
 
       navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          const accuracy = position.coords.accuracy
-          console.log("GPS Location obtained with accuracy:", accuracy)
+        (position) => {
+          const { latitude, longitude, accuracy } = position.coords
+          console.log("GPS obtained:", { latitude, longitude, accuracy })
 
-          if (accuracy <= 100) {
+          if (accuracy <= 500) {
             setLocationStatus('good')
-            resolve({
-              latitude: position.coords.latitude,
-              longitude: position.coords.longitude,
-              accuracy: accuracy,
-              method: 'gps'
-            })
-          } else if (accuracy <= 1000) {
-            setLocationStatus('poor')
-            console.log("GPS accuracy is poor but acceptable:", accuracy)
-            resolve({
-              latitude: position.coords.latitude,
-              longitude: position.coords.longitude,
-              accuracy: accuracy,
-              method: 'gps'
-            })
           } else {
-            console.log("GPS accuracy too poor (", accuracy, "m), falling back to IP location")
             setLocationStatus('poor')
-            try {
-              const ipLocation = await getIPLocationFallback()
-              resolve({
-                latitude: ipLocation.latitude,
-                longitude: ipLocation.longitude,
-                accuracy: ipLocation.accuracy,
-                method: 'ip'
-              })
-            } catch (ipError) {
-              console.warn("IP location failed, using poor GPS as last resort")
-              resolve({ // Still resolve with poor GPS if IP fails but GPS gave something
-                latitude: position.coords.latitude,
-                longitude: position.coords.longitude,
-                accuracy: accuracy,
-                method: 'gps'
-              })
-            }
+            toast.warning(`GPS accuracy is ${Math.round(accuracy)}m. Move to an open area for better results.`)
           }
-        },
-        async (error) => { // This 'error' is a GeolocationPositionError
-          console.error("GPS location failed:", error)
-          setLocationStatus('failed')
 
-          console.log("GPS failed, attempting IP location fallback")
-          try {
-            const ipLocation = await getIPLocationFallback()
-            setLocationStatus('poor')
-            resolve({
-              latitude: ipLocation.latitude,
-              longitude: ipLocation.longitude,
-              accuracy: ipLocation.accuracy,
-              method: 'ip'
-            })
-          } catch (ipError) {
-            setLocationStatus('failed')
-            // This is the final fallback, if both GPS and IP fail.
-            // Reject with a string that classifyError can handle.
-            let rejectionMessage: string;
-            switch (error.code) {
-              case error.PERMISSION_DENIED:
-                rejectionMessage = "Geolocation permission denied";
-                break;
-              case error.POSITION_UNAVAILABLE:
-                rejectionMessage = "Geolocation position unavailable";
-                break;
-              case error.TIMEOUT:
-                rejectionMessage = "Geolocation request timed out";
-                break;
-              default:
-                rejectionMessage = "Unknown geolocation error";
-                break;
-            }
-            reject(new Error(rejectionMessage));
-          }
+          resolve({ latitude, longitude, accuracy, method: 'gps' })
         },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 300000
-        }
+        (error) => {
+          setLocationStatus('failed')
+          let message = "Unable to get your location."
+          switch (error.code) {
+            case error.PERMISSION_DENIED:
+              message = "Please enable location permission to check in."
+              break
+            case error.POSITION_UNAVAILABLE:
+              message = "Location unavailable. Try again in an open area."
+              break
+            case error.TIMEOUT:
+              message = "Location request timed out. Please try again."
+              break
+            default:
+              message = "Could not get GPS location. Please try again."
+          }
+          reject(new Error(message))
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
       )
     })
   }
 
-  // ✅ Add IP location fallback function to frontend
-  const getIPLocationFallback = async () => {
-    const services = [
-      {
-        name: 'ipapi.co',
-        url: 'https://ipapi.co/json/',
-        parser: (data: any) => ({
-          latitude: data.latitude,
-          longitude: data.longitude,
-          accuracy: 1000 // IP location is approximate
-        })
-      },
-      {
-        name: 'ip-api.com',
-        url: 'http://ip-api.com/json/',
-        parser: (data: any) => ({
-          latitude: data.lat,
-          longitude: data.lon,
-          accuracy: 1000
-        })
-      }
-    ]
-
-    for (const service of services) {
-      try {
-        console.log(`Trying IP location service: ${service.name}`)
-        const response = await fetch(service.url, {
-          signal: AbortSignal.timeout(5000) // 5 second timeout
-        })
-
-        if (!response.ok) continue
-
-        const data = await response.json()
-        const result = service.parser(data)
-
-        // Validate the result
-        if (!result.latitude || !result.longitude ||
-          Math.abs(result.latitude) > 90 || Math.abs(result.longitude) > 180) {
-          continue
-        }
-
-        console.log(`Successfully got IP location from ${service.name}`)
-        return result
-      } catch (error) {
-        console.warn(`${service.name} failed:`, error)
-        continue
-      }
-    }
-
-    throw new Error('All IP location services failed')
-  }
-
-  // ✅ Enhanced check-in with retry feedback
   const handleCheckIn = async () => {
     if (hasCheckedInToday) {
-      toast.warning(ERROR_MESSAGES.USER_ALREADY_EXISTS) // Use toast for warning
+      toast.warning("You have already checked in today.")
       return
     }
+
     setCheckInLoading(true)
-    setNetworkStatus('checking')
     try {
-      // Get current location
       const location = await getCurrentLocation()
 
-      const params = {
+      // Enforce GPS method and validate accuracy
+      if (location.accuracy > 2000) {
+        throw new Error("GPS accuracy is too poor (over 2km). Please move to an open area.")
+      }
+
+      await checkIn({
         userId,
-        method: location.method,
+        method: "gps",
         latitude: location.latitude,
         longitude: location.longitude,
         accuracy: location.accuracy
-      }
-      const result = await checkIn(params)
-      toast.success(result.message) // Use toast for success
-      setHasCheckedInToday(true)
-      setNetworkStatus('online')
+      })
 
-      // Refresh attendance data
-      setTimeout(async () => {
-        const updatedAttendance = await getTodayAttendance(userId)
-        setAttendance(updatedAttendance.data)
-      }, 1000)
+      toast.success(`Checked in successfully (GPS accuracy: ${Math.round(location.accuracy)}m)`)
+      setHasCheckedInToday(true)
+
+      // Refresh data
+      const updated = await getTodayAttendance(userId)
+      setAttendance(updated.data)
     } catch (err: any) {
-      console.error("Check-in error:", err)
-      setNetworkStatus('offline')
-      // Use the new location error handler for location-specific errors,
-      // otherwise fallback to network handler.
-      if (err.message.includes('geolocation') || err.message.includes('location services')) {
-        errorHandlers.location(err, true)
-      } else {
-        errorHandlers.network(err, true)
-      }
+      console.error("Check-in failed:", err)
+      toast.error(err.message || "Check-in failed. Please try again.")
     } finally {
       setCheckInLoading(false)
-      setLocationStatus('checking')
     }
   }
 
-  // ✅ Enhanced check-out with better UX
   const handleCheckOut = async () => {
     if (hasCheckedOutToday) {
-      toast.warning(ERROR_MESSAGES.USER_ALREADY_EXISTS) // Use toast for warning
+      toast.warning("You have already checked out today.")
       return
     }
-    setCheckOutLoading(true) // ✅ Only set check-out loading
+
+    setCheckOutLoading(true)
     try {
-      // Get current location
       const location = await getCurrentLocation()
 
-      const params = {
+      if (location.accuracy > 2000) {
+        throw new Error("GPS accuracy is too poor (over 2km). Please move to an open area.")
+      }
+
+      await checkOut({
         userId,
-        method: location.method,
+        method: "gps",
         latitude: location.latitude,
         longitude: location.longitude,
         accuracy: location.accuracy
-      }
-      const result = await checkOut(params)
-      toast.success(result.message) // Use toast for success
+      })
+
+      toast.success(`Checked out successfully (GPS accuracy: ${Math.round(location.accuracy)}m)`)
       setHasCheckedOutToday(true)
 
-      // Refresh attendance data
-      setTimeout(async () => {
-        const updatedAttendance = await getTodayAttendance(userId)
-        setAttendance(updatedAttendance.data)
-      }, 1000)
+      const updated = await getTodayAttendance(userId)
+      setAttendance(updated.data)
     } catch (err: any) {
-      console.error("Check-out error:", err)
-      // Use the new location error handler for location-specific errors,
-      // otherwise fallback to network handler.
-      if (err.message.includes('geolocation') || err.message.includes('location services')) {
-        errorHandlers.location(err, true)
-      } else {
-        errorHandlers.network(err, true)
-      }
+      console.error("Check-out failed:", err)
+      toast.error(err.message || "Check-out failed. Please try again.")
     } finally {
-      setCheckOutLoading(false) // ✅ Only reset check-out loading
-      setLocationStatus('checking')
+      setCheckOutLoading(false)
     }
   }
 
-  // ✅ Location status indicator
   const getLocationStatusIcon = () => {
     switch (locationStatus) {
-      case 'checking':
-        return <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
-      case 'good':
-        return <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-      case 'poor':
-        return <div className="w-2 h-2 bg-orange-400 rounded-full"></div>
-      case 'failed':
-        return <div className="w-2 h-2 bg-red-400 rounded-full"></div>
-      default:
-        return <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+      case 'checking': return <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
+      case 'good': return <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+      case 'poor': return <div className="w-2 h-2 bg-orange-400 rounded-full"></div>
+      case 'failed': return <div className="w-2 h-2 bg-red-400 rounded-full"></div>
+      default: return <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
     }
   }
 
   const getLocationStatusText = () => {
     switch (locationStatus) {
-      case 'checking':
-        return 'Checking location...'
-      case 'good':
-        return 'GPS location accurate'
-      case 'poor':
-        return 'Using approximate location'
-      case 'failed':
-        return 'Location unavailable'
-      default:
-        return 'Location ready'
+      case 'checking': return 'Getting location...'
+      case 'good': return 'GPS accurate'
+      case 'poor': return 'Low GPS accuracy'
+      case 'failed': return 'Location access denied'
+      default: return 'Ready'
     }
   }
 
   return (
     <div className="min-h-screen bg-white/70 backdrop-blur-sm p-4">
       <div className="max-w-2xl mx-auto space-y-6">
-        {/* Header */}
         <div className="text-center space-y-2">
           <h1 className="text-2xl font-bold text-gray-800">Attendance Clock</h1>
           <p className="text-gray-600 text-lg">{formatDate()}</p>
         </div>
 
-        {/* User Info Card */}
         <Card className="bg-white/80 border-gray-200 backdrop-blur-sm shadow-lg">
           <CardContent className="p-6">
             <div className="flex items-center space-x-4">
               <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-xl font-bold">
-                {userName.split(" ").map((n: string) => n[0]).join("").toUpperCase()}
+                {userName.split(" ").map(n => n[0]).join("").toUpperCase()}
               </div>
-              <div className="flex-1">
+              <div>
                 <h2 className="text-xl font-semibold text-gray-800">{userName}</h2>
                 <p className="text-gray-600">{userEmail}</p>
-                <div className="flex items-center space-x-2 mt-1">
-                  <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                  <span className="text-sm text-gray-500">Online</span>
-                </div>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Today's Status */}
         <Card className="bg-white/80 border-gray-200 backdrop-blur-sm shadow-lg">
           <CardHeader>
             <CardTitle className="text-gray-800 flex items-center">
@@ -386,11 +225,6 @@ export default function SimpleAttendanceClock({
                 <p className="text-gray-800 text-xl font-semibold">
                   {hasCheckedInToday ? formatTime(attendance?.signInTime) : "--:--"}
                 </p>
-                {attendance?.signInLocation?.address && (
-                  <p className="text-gray-500 text-xs mt-1 truncate">
-                    {attendance.signInLocation.address}
-                  </p>
-                )}
               </div>
 
               <div className="bg-gray-50/80 rounded-lg p-4 border border-gray-200">
@@ -405,23 +239,17 @@ export default function SimpleAttendanceClock({
                 <p className="text-gray-800 text-xl font-semibold">
                   {hasCheckedOutToday ? formatTime(attendance?.signOutTime) : "--:--"}
                 </p>
-                {attendance?.signOutLocation?.address && (
-                  <p className="text-gray-500 text-xs mt-1 truncate">
-                    {attendance.signOutLocation.address}
-                  </p>
-                )}
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Action Buttons */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Button
             onClick={handleCheckIn}
             disabled={hasCheckedInToday || checkInLoading}
             size="lg"
-            className="h-20 text-xl font-semibold bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white cursor-pointer"
+            className="h-20 text-xl font-semibold bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white"
           >
             {checkInLoading ? (
               <div className="flex items-center space-x-2">
@@ -432,9 +260,6 @@ export default function SimpleAttendanceClock({
               <div className="flex flex-col items-center space-y-2">
                 <CheckCircle size={32} />
                 <span>Clock In</span>
-                {hasCheckedInToday && (
-                  <span className="text-sm opacity-75">Already done today</span>
-                )}
               </div>
             )}
           </Button>
@@ -443,7 +268,7 @@ export default function SimpleAttendanceClock({
             onClick={handleCheckOut}
             disabled={hasCheckedOutToday || checkOutLoading}
             size="lg"
-            className="h-20 text-xl font-semibold bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white cursor-pointer"
+            className="h-20 text-xl font-semibold bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white"
           >
             {checkOutLoading ? (
               <div className="flex items-center space-x-2">
@@ -454,59 +279,28 @@ export default function SimpleAttendanceClock({
               <div className="flex flex-col items-center space-y-2">
                 <XCircle size={32} />
                 <span>Clock Out</span>
-                {hasCheckedOutToday && (
-                  <span className="text-sm opacity-75">Already done today</span>
-                )}
               </div>
             )}
           </Button>
         </div>
 
-        {/* ✅ Enhanced Location Info with Network Status */}
         <Card className="bg-white/80 border-gray-200 backdrop-blur-sm shadow-lg">
           <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2 text-gray-600 text-sm">
                 <MapPin className="w-4 h-4" />
                 <span>{getLocationStatusText()}</span>
               </div>
               {getLocationStatusIcon()}
             </div>
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2 text-gray-600 text-sm">
-                {networkStatus === 'online' ? (
-                  <>
-                    <Wifi className="w-4 h-4 text-green-500" />
-                    <span className="text-green-600">Connected</span>
-                  </>
-                ) : networkStatus === 'offline' ? (
-                  <>
-                    <WifiOff className="w-4 h-4 text-red-500" />
-                    <span className="text-red-600">Connection issues</span>
-                  </>
-                ) : (
-                  <>
-                    <div className="w-4 h-4 border-2 border-gray-400 border-t-blue-500 rounded-full animate-spin" />
-                    <span className="text-blue-600">Connecting...</span>
-                  </>
-                )}
-              </div>
-            </div>
-
             {locationStatus === 'poor' && (
               <p className="text-xs text-orange-600 mt-2">
-                For better accuracy, try moving to an open area away from buildings.
+                GPS accuracy is low. Move to an open area for better results.
               </p>
             )}
             {locationStatus === 'failed' && (
-              <p className="text-xs text-blue-600 mt-2">
-                Using approximate location based on your internet connection.
-              </p>
-            )}
-            {networkStatus === 'offline' && (
               <p className="text-xs text-red-600 mt-2">
-                Please check your internet connection and try again.
+                Enable location services to check in.
               </p>
             )}
           </CardContent>
