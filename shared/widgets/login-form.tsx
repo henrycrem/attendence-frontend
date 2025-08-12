@@ -300,10 +300,10 @@ export default function LoginForm() {
       </div>
       
       {/* Security Notice */}
-      <div className="mt-6 text-center text-sm text-gray-600 flex items-center justify-center">
+      {/* <div className="mt-6 text-center text-sm text-gray-600 flex items-center justify-center">
         <Shield className="w-4 h-4 mr-2 text-red-600" />
         <span>Protected by enterprise-grade security</span>
-      </div>
+      </div> */}
     </div>
   )
 }

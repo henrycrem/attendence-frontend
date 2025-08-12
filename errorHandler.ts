@@ -28,6 +28,7 @@ export const ERROR_MESSAGES = {
   // Password Reset Errors
   RESET_TOKEN_INVALID: "This password reset link is invalid or has expired. Please request a new one.",
   SAME_PASSWORD: "Your new password cannot be the same as your current password.",
+  INVALID_CURRENT_PASSWORD: "The current password you entered is incorrect. Please try again.",
   RESET_NOT_VERIFIED: "Please verify your email first before resetting your password.",
   
   // Network/Server Errors
@@ -125,9 +126,18 @@ export function classifyError(error: string | Error): keyof typeof ERROR_MESSAGE
   if (errorMessage.includes('reset') && (errorMessage.includes('invalid') || errorMessage.includes('expired'))) {
     return 'RESET_TOKEN_INVALID'
   }
-  if (errorMessage.includes('same password') || errorMessage.includes('current password')) {
+  if (errorMessage.includes('same password') || errorMessage.includes('errorMessage.includes')) {
     return 'SAME_PASSWORD'
   }
+
+  if (
+  errorMessage.includes('invalid') &&
+  errorMessage.includes('current') &&
+  errorMessage.includes('password')
+) {
+  return 'INVALID_CURRENT_PASSWORD'
+}
+
   if (errorMessage.includes('verify') && errorMessage.includes('first')) {
     return 'RESET_NOT_VERIFIED'
   }
@@ -304,3 +314,6 @@ export const errorHandlers = {
     return message;
   },
 }
+
+
+

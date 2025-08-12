@@ -2,13 +2,28 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { User, Menu, X, LogOut, Clock } from 'lucide-react'
+import { User, Menu, X, LogOut, Clock } from "lucide-react"
 import EmployeeSearch from "@/components/employee-search"
 
 interface TopBarProps {
   user: any
   error: string | null
   onMenuClick: () => void
+}
+
+const getAvatarUrl = (avatarPath: string | null | undefined): string => {
+  if (!avatarPath) {
+    return "/user-profile-avatar.png"
+  }
+
+  // If it's already a full URL, return as is
+  if (avatarPath.startsWith("http")) {
+    return avatarPath
+  }
+
+  // If it's a relative path, construct the full backend URL
+  const backendUrl = process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:4000"
+  return `${backendUrl}${avatarPath}`
 }
 
 export default function TopBar({ user, error, onMenuClick }: TopBarProps) {
@@ -41,34 +56,30 @@ export default function TopBar({ user, error, onMenuClick }: TopBarProps) {
   }
 
   // Get current time
-  const currentTime = new Date().toLocaleTimeString([], { 
-    hour: '2-digit', 
-    minute: '2-digit',
-    hour12: true 
+  const currentTime = new Date().toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
   })
 
   // Determine what to show in center section based on user role
   const renderCenterSection = () => {
-    if (user?.role?.roleName === 'super_admin') {
+    if (user?.role?.roleName === "super_admin") {
       return (
         <div className="w-full max-w-sm lg:max-w-md">
           <EmployeeSearch className="w-full" />
         </div>
       )
-    } else if (user?.role?.roleName === 'admin') {
+    } else if (user?.role?.roleName === "admin") {
       return (
         <div className="hidden sm:block text-center">
-          <h1 className="text-lg lg:text-xl font-semibold text-gray-800">
-            Attendance Dashboard
-          </h1>
+          <h1 className="text-lg lg:text-xl font-semibold text-gray-800">Attendance Dashboard</h1>
         </div>
       )
     } else {
       return (
         <div className="hidden sm:block text-center">
-          <h1 className="text-lg lg:text-xl font-semibold text-gray-800">
-            Attendance Tracking System
-          </h1>
+          <h1 className="text-lg lg:text-xl font-semibold text-gray-800">Attendance Tracking System</h1>
         </div>
       )
     }
@@ -77,7 +88,6 @@ export default function TopBar({ user, error, onMenuClick }: TopBarProps) {
   return (
     <div className="relative z-40">
       <div className="flex items-center justify-between px-3 sm:px-6 py-3 sm:py-4 bg-white/95 backdrop-blur-sm border-b border-gray-200 shadow-sm">
-        
         {/* Left Section */}
         <div className="flex items-center space-x-2 sm:space-x-4 flex-shrink-0">
           {/* Mobile Menu Button */}
@@ -88,36 +98,30 @@ export default function TopBar({ user, error, onMenuClick }: TopBarProps) {
           >
             <Menu size={20} className="sm:w-6 sm:h-6" />
           </button>
-                  
+
           {/* Clock - Hidden on mobile if super_admin */}
-          <div className={`items-center space-x-2 ${
-            user?.role?.roleName === 'super_admin' ? 'hidden lg:flex' : 'flex'
-          }`}>
+          <div
+            className={`items-center space-x-2 ${user?.role?.roleName === "super_admin" ? "hidden lg:flex" : "flex"}`}
+          >
             <Clock size={16} className="sm:w-5 sm:h-5 text-gray-500 flex-shrink-0" />
-            <span className="text-xs sm:text-sm font-medium text-gray-600 whitespace-nowrap">
-              {currentTime}
-            </span>
+            <span className="text-xs sm:text-sm font-medium text-gray-600 whitespace-nowrap">{currentTime}</span>
           </div>
         </div>
 
         {/* Center Section - Responsive Search/Title */}
-        <div className="flex-1 flex justify-center items-center min-w-0">
-          {renderCenterSection()}
-        </div>
+        <div className="flex-1 flex justify-center items-center min-w-0">{renderCenterSection()}</div>
 
         {/* Right Section - User Profile */}
         <div className="flex items-center space-x-2 sm:space-x-3 flex-shrink-0">
           {/* User Info - Hidden on mobile */}
           <div className="text-right hidden md:block">
-            <p className="text-sm font-medium text-gray-700 truncate max-w-32 lg:max-w-none">
-              {user?.name || "User"}
-            </p>
+            <p className="text-sm font-medium text-gray-700 truncate max-w-32 lg:max-w-none">{user?.name || "User"}</p>
             <div className="flex items-center justify-end">
               <div className="inline-block w-2 h-2 bg-green-500 rounded-full mr-1 flex-shrink-0"></div>
               <p className="text-xs text-green-600">Online</p>
             </div>
           </div>
-                  
+
           {/* Profile Button */}
           <button
             onClick={toggleUserSheet}
@@ -125,7 +129,7 @@ export default function TopBar({ user, error, onMenuClick }: TopBarProps) {
             aria-label="User menu"
           >
             <img
-              src={user?.avatar || "/api/placeholder/40/40"}
+              src={getAvatarUrl(user?.avatar) || "/placeholder.svg"}
               alt="Profile"
               className="h-full w-full object-cover"
             />
@@ -134,14 +138,10 @@ export default function TopBar({ user, error, onMenuClick }: TopBarProps) {
       </div>
 
       {/* Overlay for User Sheet */}
-      {isUserSheetOpen && (
-        <div
-          className="fixed inset-0 z-30 bg-black/20 lg:bg-transparent"
-          onClick={closeSheet}
-        />
-      )}
+      {isUserSheetOpen && <div className="fixed inset-0 mobile-zindex  lg:bg-transparent" onClick={closeSheet} />}
 
       {/* User Profile Sheet */}
+      
       <div
         className={`fixed right-2 sm:right-4 top-14 sm:top-16 w-72 sm:w-80 bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-gray-200 z-40 overflow-hidden transition-all duration-300 transform ${
           isUserSheetOpen
@@ -162,17 +162,13 @@ export default function TopBar({ user, error, onMenuClick }: TopBarProps) {
           <div className="flex flex-col items-center pb-4 sm:pb-6">
             <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-xl overflow-hidden shadow-sm border-4 border-gray-100 mb-3 sm:mb-4">
               <img
-                src={user?.avatar || "/api/placeholder/80/80"}
+                src={getAvatarUrl(user?.avatar) || "/placeholder.svg"}
                 alt="Profile"
                 className="h-full w-full object-cover"
               />
             </div>
-            <h3 className="text-base sm:text-lg font-semibold text-gray-800 text-center">
-              {user?.name || "User"}
-            </h3>
-            <p className="text-sm text-gray-600 mb-2 text-center">
-              {user?.role?.displayName || "Employee"}
-            </p>
+            <h3 className="text-base sm:text-lg font-semibold text-gray-800 text-center">{user?.name || "User"}</h3>
+            <p className="text-sm text-gray-600 mb-2 text-center">{user?.role?.displayName || "Employee"}</p>
             <div className="flex items-center">
               <div className="inline-block w-2 h-2 bg-green-500 rounded-full mr-2"></div>
               <span className="text-xs text-green-600 font-medium">Online</span>

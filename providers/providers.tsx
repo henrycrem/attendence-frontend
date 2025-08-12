@@ -1,7 +1,7 @@
 "use client"
 
 import { QueryProvider } from "../providers/query-provider"
-import { Toaster } from "react-hot-toast"
+import { Toaster } from "@/components/ui/sonner"
 import { Provider } from "react-redux"
 import { store } from "../store"
 import { AuthProvider } from "../contexts/AuthContext"

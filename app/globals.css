@@ -120,3 +120,8 @@
     @apply bg-background text-foreground;
   }
 }
+
+
+.mobile-zindex{
+  z-index: 100;
+}

@@ -1,15 +1,11 @@
 "use client"
 
-import { useState, useEffect, useTransition } from "react"
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
 import { Search, Users, Eye, ChevronLeft, ChevronRight, Plus, Edit, Trash2, Loader2 } from "lucide-react"
-import { getAllEmployeesReal, getDepartments, deleteEmployeeAction } from "@/actions/employee"
-import Link from "next/link"
 import { toast } from "sonner"
 import {
   AlertDialog,
@@ -22,19 +18,18 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import type { Employee, Department, Pagination } from "@/types/employee"
+import Link from "next/link"
+import { getAllRolesAction, deleteRoleAction } from "@/actions/role"
+import type { Role, Pagination } from "@/types/role"
 
-export default function EmployeeList() {
-  const [employees, setEmployees] = useState<Employee[]>([])
-  const [departments, setDepartments] = useState<Department[]>([])
+export default function RoleList() {
+  const [roles, setRoles] = useState<Role[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [isDeleting, startDeleteTransition] = useTransition()
-
+  const [deletingId, setDeletingId] = useState<string | null>(null) // Track which role is being deleted
 
   // Filters and pagination
   const [search, setSearch] = useState("")
-  const [selectedDepartment, setSelectedDepartment] = useState("all")
   const [currentPage, setCurrentPage] = useState(1)
   const [pagination, setPagination] = useState<Pagination>({
     currentPage: 1,
@@ -44,89 +39,77 @@ export default function EmployeeList() {
     hasPrev: false,
   })
 
-  const fetchEmployees = async () => {
+  const fetchRoles = async () => {
     try {
       setLoading(true)
       setError(null)
-
-      const response = await getAllEmployeesReal({
+      const response = await getAllRolesAction({
         page: currentPage,
         limit: 10,
         search: search.trim(),
-        department: selectedDepartment === "all" ? undefined : selectedDepartment,
       })
-      if (response.status === "success") {
-        setEmployees(response.data.employees)
-        setPagination(response.data.pagination)
+      if (response.success) {
+        setRoles(response.data)
+        setPagination(
+          response.pagination || {
+            currentPage: 1,
+            totalPages: 1,
+            totalRecords: response.data.length,
+            hasNext: false,
+            hasPrev: false,
+          }
+        )
       } else {
-        setError(response.message)
+        setError(response.error)
       }
     } catch (err: any) {
-      console.error("Failed to fetch employees:", err)
-      setError(err.message || "Failed to load employees")
+      console.error("Failed to fetch roles:", err)
+      setError(err.message || "Failed to load roles")
     } finally {
       setLoading(false)
     }
   }
 
-  const fetchDepartments = async () => {
-    try {
-      const response = await getDepartments()
-      if (response.status === "success") {
-        setDepartments(response.data.departments)
-      } else {
-        console.error("Failed to fetch departments:", response.message)
-      }
-    } catch (err: any) {
-      console.error("Failed to fetch departments:", err)
-    }
-  }
-
   useEffect(() => {
-    fetchDepartments()
-  }, [])
-
-  useEffect(() => {
-    fetchEmployees()
-  }, [currentPage, search, selectedDepartment])
+    fetchRoles()
+  }, [currentPage, search])
 
   const handleSearch = (value: string) => {
     setSearch(value)
-    setCurrentPage(1) // Reset to first page when searching
+    setCurrentPage(1)
   }
 
-  const handleDepartmentChange = (value: string) => {
-    setSelectedDepartment(value)
-    setCurrentPage(1) // Reset to first page when filtering
-  }
+  const handleDeleteRole = async (roleId: string, roleName: string) => {
+    const previousRoles = [...roles]
+    const previousPagination = { ...pagination }
 
-  const handleDeleteEmployee = async (employeeId: string) => {
-    startDeleteTransition(async () => {
-      const result = await deleteEmployeeAction(employeeId)
-      if (result.status === "success") {
-        toast( result.message,
-        )
-        fetchEmployees() // Re-fetch employees after deletion
-      } else {
-        toast(
-          result.message,
-        )
-      }
+    // Optimistically remove from UI
+    setRoles(previousRoles.filter(r => r.id !== roleId))
+    setPagination({
+      ...previousPagination,
+      totalRecords: previousPagination.totalRecords - 1,
     })
-  }
 
-  const getStatusBadge = (status: string) => {
-    switch (status?.toLowerCase()) {
-      case "online":
-        return (
-          <Badge variant="default" className="bg-green-100 text-green-800">
-            Online
-          </Badge>
-        )
-      case "offline":
-        return <Badge variant="secondary">Offline</Badge>
-      default:
-        return <Badge variant="outline">Unknown</Badge>
+    // Show loader only for this row
+    setDeletingId(roleId)
+
+    try {
+      const result = await deleteRoleAction(roleId)
+
+      if (result.success) {
+        toast.success(result.message || `Role '${roleName}' deleted successfully!`)
+      } else {
+        // Revert on failure
+        setRoles(previousRoles)
+        setPagination(previousPagination)
+        toast.error(result.error || `Failed to delete role '${roleName}'.`)
+      }
+    } catch (err: any) {
+      setRoles(previousRoles)
+      setPagination(previousPagination)
+      toast.error(err.message || `An unexpected error occurred while deleting '${roleName}'.`)
+    } finally {
+      setDeletingId(null) // Stop loading
     }
   }
 
@@ -141,7 +124,7 @@ export default function EmployeeList() {
         <Card className="max-w-md mx-auto">
           <CardContent className="p-6 text-center">
             <p className="text-red-600 mb-4">{error}</p>
-            <Button onClick={fetchEmployees}>Try Again</Button>
+            <Button onClick={fetchRoles}>Try Again</Button>
           </CardContent>
         </Card>
       </div>
@@ -156,17 +139,18 @@ export default function EmployeeList() {
           <div className="flex items-center space-x-3">
             <Users className="h-8 w-8 text-blue-600" />
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Employee Management</h1>
-              <p className="text-gray-600">Manage and view employee information</p>
+              <h1 className="text-3xl font-bold text-gray-900">Role Management</h1>
+              <p className="text-gray-600">Manage and view user roles</p>
             </div>
           </div>
-          <Link href="/dashboard/employees/new">
+          <Link href="/dashboard/users-role/new">
             <Button>
               <Plus className="h-4 w-4 mr-2" />
-              Add New Employee
+              Add New Role
             </Button>
           </Link>
         </div>
+
         {/* Filters */}
         <Card>
           <CardContent className="p-6">
@@ -175,36 +159,22 @@ export default function EmployeeList() {
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                   <Input
-                    placeholder="Search employees by name or email..."
+                    placeholder="Search roles by display name or role name..."
                     value={search}
                     onChange={(e) => handleSearch(e.target.value)}
                     className="pl-10"
                   />
                 </div>
               </div>
-              <div className="w-full sm:w-48">
-                <Select value={selectedDepartment} onValueChange={handleDepartmentChange}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select Department" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Departments</SelectItem>
-                    {departments.map((dept) => (
-                      <SelectItem key={dept.id} value={dept.name}>
-                        {dept.name} ({dept.employeeCount})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
           </CardContent>
         </Card>
-        {/* Employee Table */}
+
+        {/* Role Table */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
-              <span>Employees ({pagination.totalRecords})</span>
+              <span>Roles ({pagination.totalRecords})</span>
               {loading && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>}
             </CardTitle>
           </CardHeader>
@@ -213,14 +183,12 @@ export default function EmployeeList() {
               <div className="flex justify-center items-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
               </div>
-            ) : employees.length === 0 ? (
+            ) : roles.length === 0 ? (
               <div className="text-center py-8">
                 <Users className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-2 text-sm font-medium text-gray-900">No employees found</h3>
+                <h3 className="mt-2 text-sm font-medium text-gray-900">No roles found</h3>
                 <p className="mt-1 text-sm text-gray-500">
-                  {search || selectedDepartment !== "all"
-                    ? "Try adjusting your search or filter criteria."
-                    : "No employees have been added yet."}
+                  {search ? "Try adjusting your search criteria." : "No roles have been added yet."}
                 </p>
               </div>
             ) : (
@@ -229,36 +197,30 @@ export default function EmployeeList() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Email</TableHead>
-                        <TableHead>Department</TableHead>
-                        <TableHead>Position</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Attendance</TableHead>
-                        <TableHead>Hire Date</TableHead>
+                        <TableHead>Display Name</TableHead>
+                        <TableHead>Role Name</TableHead>
+                        <TableHead>Description</TableHead>
+                        <TableHead>Created At</TableHead>
+                        <TableHead>Updated At</TableHead>
                         <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {employees.map((employee) => (
-                        <TableRow key={employee.id}>
-                          <TableCell className="font-medium">{employee.name}</TableCell>
-                          <TableCell>{employee.email}</TableCell>
-                          <TableCell>{employee.department}</TableCell>
-                          <TableCell>{employee.position}</TableCell>
-                          <TableCell>{getStatusBadge(employee.lastOnlineStatus)}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline">{employee.totalAttendance} records</Badge>
-                          </TableCell>
-                          <TableCell>{formatDate(employee.hireDate)}</TableCell>
+                      {roles.map((role) => (
+                        <TableRow key={role.id}>
+                          <TableCell className="font-medium">{role.displayName}</TableCell>
+                          <TableCell>{role.roleName}</TableCell>
+                          <TableCell>{role.description || "N/A"}</TableCell>
+                          <TableCell>{formatDate(role.createdAt)}</TableCell>
+                          <TableCell>{formatDate(role.updatedAt)}</TableCell>
                           <TableCell className="flex gap-2">
-                            <Link href={`/dashboard/employees/${employee.id}`}>
+                            <Link href={`/dashboard/roles/${role.id}`}>
                               <Button variant="outline" size="sm">
                                 <Eye className="h-4 w-4 mr-1" />
                                 View
                               </Button>
                             </Link>
-                            <Link href={`/dashboard/employees/edit/${employee.id}`}>
+                            <Link href={`/dashboard/roles/edit/${role.id}`}>
                               <Button variant="outline" size="sm">
                                 <Edit className="h-4 w-4 mr-1" />
                                 Edit
@@ -266,8 +228,12 @@ export default function EmployeeList() {
                             </Link>
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
-                                <Button variant="destructive" size="sm" disabled={isDeleting}>
-                                  {isDeleting ? (
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  disabled={deletingId === role.id || role.roleName === "super_admin"}
+                                >
+                                  {deletingId === role.id ? (
                                     <Loader2 className="h-4 w-4 animate-spin mr-1" />
                                   ) : (
                                     <Trash2 className="h-4 w-4 mr-1" />
@@ -279,14 +245,16 @@ export default function EmployeeList() {
                                 <AlertDialogHeader>
                                   <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                                   <AlertDialogDescription>
-                                    This action cannot be undone. This will permanently delete the employee{" "}
-                                    <span className="font-semibold">{employee.name}</span> and remove their data from
+                                    This action cannot be undone. This will permanently delete the role{" "}
+                                    <span className="font-semibold">{role.displayName}</span> and remove its data from
                                     our servers.
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                   <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction onClick={() => handleDeleteEmployee(employee.id)}>
+                                  <AlertDialogAction
+                                    onClick={() => handleDeleteRole(role.id, role.displayName)}
+                                  >
                                     Continue
                                   </AlertDialogAction>
                                 </AlertDialogFooter>
@@ -298,6 +266,7 @@ export default function EmployeeList() {
                     </TableBody>
                   </Table>
                 </div>
+
                 {/* Pagination */}
                 {pagination.totalPages > 1 && (
                   <div className="flex items-center justify-between mt-6">

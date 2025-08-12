@@ -1,6 +1,9 @@
 'use server'
 
 import { cookies } from 'next/headers'
+import { revalidatePath } from "next/cache"
+import type { EmployeeFormData,  Role } from "@/types/employee"
+import { redirect } from 'next/navigation'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:4000'
 
@@ -11,6 +14,21 @@ class AuthenticationError extends Error {
     this.statusCode = statusCode
     this.name = "AuthenticationError"
   }
+}
+
+interface ApiResponse<T> {
+  message: string
+  data: T
+  status: "success" | "error"
+}
+
+// Helper to handle API responses
+async function handleApiResponse<T>(response: Response): Promise<ApiResponse<T>> {
+  const data = await response.json()
+  if (!response.ok) {
+    throw new Error(data.message || `API error: ${response.statusText}`)
+  }
+  return data
 }
 
 // ✅ Get auth headers - now required for attendance operations
@@ -289,3 +307,138 @@ export async function getUserIdFromEmployeeId(employeeId: string): Promise<ApiRe
     throw new Error(error.message || 'Failed to fetch user ID')
   }
 }
+
+
+
+// ✅ Updated: Create Employee Server Action
+export async function createEmployeeAction(
+  prevState: any,
+  formData: FormData,
+): Promise<{ message: string; status: "success" | "error" }> {
+  const userId = formData.get("userId") as string
+  const hireDateString = formData.get("hireDate") as string
+  const hireDate = hireDateString ? new Date(hireDateString) : null
+  const salaryString = formData.get("salary") as string
+  const salary = salaryString ? parseFloat(salaryString) : null
+  const departmentId = formData.get("departmentId") as string | null
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/employees`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        // Add auth header if needed
+      },
+      body: JSON.stringify({ userId, hireDate, salary, departmentId }),
+    })
+
+    const result = await handleApiResponse(response)
+    if (result.status === "success") {
+      revalidatePath("/dashboard/employees")
+      redirect("/dashboard/employees")
+    }
+    return { message: result.message, status: result.status }
+  } catch (error: any) {
+    console.error("Error creating employee:", error)
+    return { message: error.message || "Failed to create employee.", status: "error" }
+  }
+}
+
+// ✅ New: Update Employee Server Action
+export async function updateEmployeeAction(
+  employeeId: string,
+  prevState: any,
+  formData: FormData,
+): Promise<{ message: string; status: "success" | "error" }> {
+  const name = formData.get("name") as string
+  const email = formData.get("email") as string
+  const password = formData.get("password") as string
+  const position = formData.get("position") as string
+  const departmentId = formData.get("departmentId") as string
+  const roleId = formData.get("roleId") as string
+  const hireDateString = formData.get("hireDate") as string
+  const hireDate = hireDateString ? new Date(hireDateString) : null
+
+  const updateData: Partial<EmployeeFormData> = {
+    name,
+    email,
+    position,
+    departmentId,
+    roleId,
+    hireDate,
+  }
+  if (password) {
+    updateData.password = password
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/employees/${employeeId}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        // Add authorization header if needed
+      },
+      body: JSON.stringify(updateData),
+    })
+
+    const result = await handleApiResponse(response)
+    if (result.status === "success") {
+      revalidatePath("/dashboard/employees") // Revalidate the employee list page
+      revalidatePath(`/dashboard/employees/edit/${employeeId}`) // Revalidate the edit page
+      redirect("/dashboard/employees") // Redirect to the employee list
+    }
+    return { message: result.message, status: result.status }
+  } catch (error: any) {
+    console.error(`Error updating employee ${employeeId}:`, error)
+    return { message: error.message || "Failed to update employee.", status: "error" }
+  }
+}
+
+// ✅ New: Delete Employee Server Action
+export async function deleteEmployeeAction(
+  employeeId: string,
+): Promise<{ message: string; status: "success" | "error" }> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/employees/${employeeId}`, {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        // Add authorization header if needed
+      },
+    })
+
+    const result = await handleApiResponse(response)
+    if (result.status === "success") {
+      revalidatePath("/dashboard/employees") // Revalidate the employee list page
+    }
+    return { message: result.message, status: result.status }
+  } catch (error: any) {
+    console.error(`Error deleting employee ${employeeId}:`, error)
+    return { message: error.message || "Failed to delete employee.", status: "error" }
+  }
+}
+
+
+export async function getRolesAction(): Promise<ApiResponse<{ roles: Role[] }>> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/roles`, {
+      headers: {
+        "Content-Type": "application/json",
+        // Add authorization header if needed
+      },
+      next: {
+        tags: ["roles"], // Tag for revalidation
+      },
+    })
+    return handleApiResponse(response)
+  } catch (error: any) {
+    console.error("Error fetching roles:", error)
+    return {
+      message: error.message || "Failed to fetch roles.",
+      data: { roles: [] },
+      status: "error",
+    }
+  }
+}
+
+

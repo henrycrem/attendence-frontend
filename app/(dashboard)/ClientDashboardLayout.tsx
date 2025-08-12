@@ -58,7 +58,7 @@ export default function ClientDashboardLayout({ children }: ClientDashboardLayou
     return (
       <div className="flex h-screen items-center justify-center bg-gray-50">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Access Error</h2>
+          <h2 className="text-2xl font-bold text-gray-100 mb-4">Access Error</h2>
           <p className="text-gray-600 mb-6">{error || "Unable to load user data"}</p>
           <button
             onClick={() => router.push("/")}
@@ -76,14 +76,14 @@ export default function ClientDashboardLayout({ children }: ClientDashboardLayou
       {/* Backdrop for mobile sidebar */}
       {mounted && sidebarOpen && (
         <div
-          className="fixed inset-0 bg-gray-800 bg-opacity-50 z-20 lg:hidden"
+          className="fixed inset-0  bg-opacity-50 z-[100] lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* Sidebar */}
       <div
-        className={`fixed lg:relative transform ease-in-out transition-all duration-300 z-30 ${
+        className={`fixed lg:relative transform ease-in-out transition-all duration-300 z-[100] ${
           mounted && sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         } shadow-2xl lg:shadow-xl`}
       >
