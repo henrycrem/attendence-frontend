@@ -4,6 +4,8 @@ import type { AttendanceFilter, AttendanceStatusFilter } from "@/types/attendanc
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { getDayRange, getWeekRange, getMonthRange } from "@/lib/date-utils"
 
+export const dynamic = "force-dynamic"
+
 interface AttendanceReportPageProps {
   searchParams: {
     page?: string
