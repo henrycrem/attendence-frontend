@@ -161,7 +161,7 @@ export default function AppSidebar({ user, error }: SidebarProps) {
             </Section>
           )}
 
-          <Section
+          {/* <Section
             title="SUPPORT"
             isExpanded={expandedSections.support}
             onToggle={() => toggleSection("support")}
@@ -171,7 +171,7 @@ export default function AppSidebar({ user, error }: SidebarProps) {
             <div className="mt-4 pt-4 border-t border-gray-100">
               <NavItem href="/logout" icon={<LogOut size={18} />} label="Sign Out" isLogout />
             </div>
-          </Section>
+          </Section> */}
 
           {process.env.NODE_ENV === "development" && (
             <div className="px-3 py-4 mt-6 text-xs text-gray-500 border-t  bg-red-50 rounded-lg mx-2 border border-red-100">
