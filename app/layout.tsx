@@ -15,9 +15,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "TechTrack - Attendance Management System",
-
   description: "Comprehensive attendance management system for Telecel Liberia",
-  
   authors: [
     {
       name: "Telecel Liberia",
@@ -34,14 +32,15 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "en_US",
-    
   },
- 
   icons: {
-    icon: "/favicon.ico",
-   
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon.ico", type: "image/x-icon" },
+    ],
+    shortcut: "/favicon.ico",
+    apple: "/favicon.ico",
   },
-
 };
 
 export default function RootLayout({
