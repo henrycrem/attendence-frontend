@@ -59,7 +59,7 @@ export async function checkIn(params: {
 }) {
   const headers = await getAuthHeaders()
 
-  const response = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/api/attendance/check-in`, {
+  const response = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/api/check-in`, {
     method: "POST",
     headers,
     body: JSON.stringify(params),
@@ -85,7 +85,7 @@ export async function checkOut(params: {
 }) {
   const headers = await getAuthHeaders()
 
-  const response = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/api/attendance/check-out`, {
+  const response = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/api/check-out`, {
     method: "POST",
     headers,
     body: JSON.stringify(params),
