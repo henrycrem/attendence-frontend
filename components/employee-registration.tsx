@@ -1,9 +1,11 @@
 'use client'
-import { useMutation, useQuery } from '@tanstack/react-query'
-import { useRouter } from 'next/navigation'
+
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { useForm, FormProvider } from 'react-hook-form'
-import axios from 'axios'
+import { registerUser } from '@/actions/user-registration' 
+import { useQuery } from '@tanstack/react-query'
+import { toast } from 'sonner' // ✅ Import toast
 
 interface FormData {
   name: string
@@ -27,9 +29,10 @@ interface Department {
 
 export default function UserRegistration() {
   const [formStep, setFormStep] = useState(1)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
-  // Initialize React Hook Form
   const methods = useForm<FormData>({
     defaultValues: {
       name: '',
@@ -50,7 +53,6 @@ export default function UserRegistration() {
     trigger,
   } = methods
 
-  // Watch form values
   const roleId = watch('roleId')
   const departmentId = watch('departmentId')
 
@@ -58,38 +60,53 @@ export default function UserRegistration() {
   const { data: roles = [], isLoading: rolesLoading, error: rolesError } = useQuery<Role[]>({
     queryKey: ['roles'],
     queryFn: async () => {
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_SERVER_URL}/api/roles`)
-      return response.data
+      const token = getCookie('access_token')
+      const response = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/api/roles`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+      if (!response.ok) throw new Error('Failed to fetch roles')
+      return response.json()
     },
   })
 
   // Fetch departments
-  const { data: departments = [], isLoading: departmentsLoading, error: departmentsError } = useQuery<Department[]>({
-    queryKey: ['departments'],
-    queryFn: async () => {
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_SERVER_URL}/api/departments`)
-      return response.data
-    },
-  })
+  const { data: departments = [], isLoading: departmentsLoading, error: departmentsError } =
+    useQuery<Department[]>({
+      queryKey: ['departments'],
+      queryFn: async () => {
+        const token = getCookie('access_token')
+        const response = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/api/departments`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+        if (!response.ok) throw new Error('Failed to fetch departments')
+        return response.json()
+      },
+    })
 
-  // Set default roleId if roles are loaded
+  // Helper to get cookie on client
+  function getCookie(name: string) {
+    const value = `; ${document.cookie}`
+    const parts = value.split(`; ${name}=`)
+    if (parts.length === 2) return parts.pop()?.split(';').shift()
+  }
+
+  // Set default roleId
   useEffect(() => {
     if (roles.length > 0 && !roleId) {
       setValue('roleId', roles[0].id)
     }
   }, [roles, roleId, setValue])
 
-  // Get selected role name
-  const getSelectedRoleName = () => {
-    return roles.find((role) => role.id === roleId)?.displayName || 'Not selected'
-  }
+  const getSelectedRoleName = () =>
+    roles.find((role) => role.id === roleId)?.displayName || 'Not selected'
 
-  // Get selected department name
-  const getSelectedDepartmentName = () => {
-    return departments.find((dept) => dept.id === departmentId)?.name || 'Not selected'
-  }
+  const getSelectedDepartmentName = () =>
+    departments.find((dept) => dept.id === departmentId)?.name || 'Not selected'
 
-  // Handle going to next step
   const handleNextStep = async () => {
     let isValid = false
     if (formStep === 1) {
@@ -102,34 +119,41 @@ export default function UserRegistration() {
     }
   }
 
-  // Go back
   const handlePrevStep = () => {
     if (formStep > 1) {
       setFormStep(formStep - 1)
     }
   }
 
-  // Mutation for form submission
-  const signUpMutation = useMutation({
-    mutationFn: async (data: FormData) => {
-      const response = await axios.post(`${process.env.NEXT_PUBLIC_SERVER_URL}/api/user-registration`, data)
-      return response.data
-    },
-    onSuccess: (data) => {
-      console.log('Registration successful:', data)
-      // Optionally redirect or show success message
-      alert('User registered successfully!')
-      router.push('/dashboard/users') // or wherever appropriate
-    },
-    onError: (error) => {
-      console.error('Registration error:', error)
-      alert('Failed to register user. Please try again.')
-    },
-  })
+  // ✅ Final form submission (only called when user clicks "Submit Registration")
+  const onSubmit = async (data: FormData) => {
+    setIsSubmitting(true)
+    setError(null)
 
-  // Only submit when clicking "Submit" on Step 3
-  const onSubmit = (data: FormData) => {
-    signUpMutation.mutate(data)
+    const formData = new FormData()
+    formData.append('name', data.name)
+    formData.append('email', data.email)
+    formData.append('roleId', data.roleId)
+    formData.append('departmentId', data.departmentId)
+    formData.append('position', data.position)
+
+    try {
+      const result = await registerUser(formData)
+
+      if (result.success) {
+        toast.success('User registered successfully!') // ✅ Success toast
+        router.push('/dashboard/users')
+      } else {
+        setError(result.message)
+        toast.error(result.message) // ✅ Error toast
+      }
+    } catch (err: any) {
+      const message = err.message || 'An unexpected error occurred'
+      setError(message)
+      toast.error(message)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -155,8 +179,8 @@ export default function UserRegistration() {
         </div>
 
         {/* Form */}
-        <form>
-          {/* Step 1: Personal Information */}
+        <form onSubmit={formStep === 3 ? handleSubmit(onSubmit) : (e) => e.preventDefault()}>
+          {/* Step 1 */}
           {formStep === 1 && (
             <div className="space-y-6">
               <h4 className="text-md font-medium text-gray-700 border-b pb-2">Personal Information</h4>
@@ -227,7 +251,7 @@ export default function UserRegistration() {
             </div>
           )}
 
-          {/* Step 2: Employee Details */}
+          {/* Step 2 */}
           {formStep === 2 && (
             <div className="space-y-6">
               <h4 className="text-md font-medium text-gray-700 border-b pb-2">Employee Details</h4>
@@ -278,7 +302,7 @@ export default function UserRegistration() {
             </div>
           )}
 
-          {/* Step 3: Review */}
+          {/* Step 3 */}
           {formStep === 3 && (
             <div className="space-y-6">
               <h4 className="text-md font-medium text-gray-700 border-b pb-2">Review Information</h4>
@@ -315,7 +339,7 @@ export default function UserRegistration() {
             <button
               type="button"
               onClick={handlePrevStep}
-              className={`px-4 cursor-pointer py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 ${
+              className={`px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 ${
                 formStep === 1 ? 'opacity-50 cursor-not-allowed' : ''
               }`}
               disabled={formStep === 1}
@@ -333,23 +357,26 @@ export default function UserRegistration() {
               </button>
             ) : (
               <button
-                type="button"
-                onClick={handleSubmit(onSubmit)}
-                className={`px-6 py-2 cursor-pointer border border-transparent rounded-md text-sm font-medium text-white ${
-                  signUpMutation.isPending
+                type="submit"
+                className={`px-6 py-2 border border-transparent rounded-md text-sm font-medium text-white ${
+                  isSubmitting
                     ? 'bg-gray-400 cursor-not-allowed'
                     : 'bg-emerald-500 hover:bg-emerald-600'
                 }`}
-                disabled={signUpMutation.isPending}
+                disabled={isSubmitting}
               >
-                {signUpMutation.isPending ? 'Submitting...' : 'Submit Registration'}
+                {isSubmitting ? 'Submitting...' : 'Submit Registration'}
               </button>
             )}
           </div>
+
+          {error && (
+            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded text-red-600 text-sm">
+              {error}
+            </div>
+          )}
         </form>
 
-
-        {/* Bottom accent line */}
         <div className="h-1 w-full mt-8 bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-full"></div>
       </div>
     </FormProvider>
