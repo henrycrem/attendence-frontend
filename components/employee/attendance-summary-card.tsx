@@ -260,7 +260,7 @@ export default function AttendanceSummaryCard() {
           <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-3 sm:space-y-0 sm:space-x-4 w-full lg:w-auto">
             {/* Clock In/Out Button - Responsive */}
             <Link 
-              href="/dashboard/attendence/clock-in"
+              href="/dashboard/attendance/clock-in"
               className={`${clockButtonProps.className} text-white font-semibold px-6 py-3 rounded-lg shadow-sm transition-all duration-200 hover:shadow-md transform hover:scale-[1.02] flex items-center justify-center space-x-2 w-full sm:w-auto min-w-[140px] group`}
             >
               <Clock className="w-4 h-4" />
