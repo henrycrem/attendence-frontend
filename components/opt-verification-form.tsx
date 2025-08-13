@@ -221,13 +221,13 @@ const VerifyOtpForm: React.FC = () => {
               </button>
 
               {/* Resend OTP button */}
-              <button
+              {/* <button
                 type="button"
                 onClick={handleResendOtp}
                 className="w-full bg-white border border-gray-300 text-gray-700 font-medium py-3 px-6 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors duration-200"
               >
                 Didn't receive the code? Resend OTP
-              </button>
+              </button> */}
             </div>
           </form>
         </div>
