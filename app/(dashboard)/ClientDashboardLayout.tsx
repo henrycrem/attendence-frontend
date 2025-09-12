@@ -6,20 +6,21 @@ import { useRouter } from "next/navigation"
 import { useAuth } from "../../contexts/AuthContext"
 import TopBar from "../../shared/widgets/dashboard/topbar"
 import Sidebar from "../../shared/widgets/dashboard/sidebar"
+import RightSidebar from "../../shared/widgets/dashboard/RightSidebar"
+import { DashboardProvider, useDashboard } from "../../contexts/DashboardContext"
 
 interface ClientDashboardLayoutProps {
   children: React.ReactNode
+  user: any
+  error: string | null
 }
 
-export default function ClientDashboardLayout({ children }: ClientDashboardLayoutProps) {
+function DashboardContent({ children, user, error }: ClientDashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [mounted, setMounted] = useState(false)
   const router = useRouter()
+  const { isRightSidebarCollapsed, toggleRightSidebar } = useDashboard()
 
-  // 🔥 Use AuthContext to get user and auth state
-  const { user, token, isAuthenticated, loading, error } = useAuth()
-
-  // Set mounted flag after initial render (client-only)
   useEffect(() => {
     setMounted(true)
 
@@ -34,49 +35,18 @@ export default function ClientDashboardLayout({ children }: ClientDashboardLayou
     }
 
     handleResize()
-
     window.addEventListener("resize", handleResize)
     return () => window.removeEventListener("resize", handleResize)
   }, [])
 
-  // Redirect if not authenticated
-  useEffect(() => {
-    if (mounted && !loading && !isAuthenticated) {
-      console.log("ClientDashboardLayout: Redirecting to / because user is not authenticated")
-      router.push("/")
-    }
-  }, [mounted, isAuthenticated, loading, router])
-
-  // 🚫 Render nothing until mounted to avoid hydration mismatch
-  if (!mounted || loading) {
-    return null
-  }
-
-  // Show error or redirect if not authenticated
-  if (error || !isAuthenticated || !user) {
-    console.log("ClientDashboardLayout: Rendering error state", { error, isAuthenticated, user })
-    return (
-      <div className="flex h-screen items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-100 mb-4">Access Error</h2>
-          <p className="text-gray-600 mb-6">{error || "Unable to load user data"}</p>
-          <button
-            onClick={() => router.push("/")}
-            className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-          >
-            Return to Login
-          </button>
-        </div>
-      </div>
-    )
-  }
+  if (!mounted) return null
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
       {/* Backdrop for mobile sidebar */}
       {mounted && sidebarOpen && (
         <div
-          className="fixed inset-0  bg-opacity-50 z-[100] lg:hidden"
+          className="fixed inset-0 bg-black bg-opacity-50 z-[100] lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
@@ -96,12 +66,25 @@ export default function ClientDashboardLayout({ children }: ClientDashboardLayou
           user={user}
           error={error}
           onMenuClick={() => setSidebarOpen(!sidebarOpen)}
-          token={token}
+          token={null} // Pass token if needed
         />
         <main className="flex-1 overflow-y-auto p-3 sm:p-6 perspective-1000 transform-gpu">
           {children}
         </main>
       </div>
+
+      {/* Right Sidebar */}
+      <div className="flex-shrink-0 z-50">
+        <RightSidebar isCollapsed={isRightSidebarCollapsed} onToggle={toggleRightSidebar} />
+      </div>
     </div>
+  )
+}
+
+export default function ClientDashboardLayout({ children, user, error }: ClientDashboardLayoutProps) {
+  return (
+    <DashboardProvider>
+      <DashboardContent user={user} error={error} children={children} />
+    </DashboardProvider>
   )
 }

@@ -36,7 +36,8 @@ const checkUserRole = async () => {
       user,
       role: user?.role?.roleName,
       isAdmin: user?.role?.roleName === 'super_admin',
-      isEmployee: user?.role?.roleName === 'employee'
+      isEmployee: user?.role?.roleName === 'employee',
+      isSales: user?.role?.roleName === 'sales'
     }
   } catch (error) {
     throw new AuthenticationError("Unable to verify your account. Please log in again.", 401)
@@ -272,10 +273,11 @@ export async function exportAttendanceData(params: {
 // ✅ Employee Dashboard Actions (For employees)
 export async function getEmployeeAttendanceData() {
   try {
-    const { isEmployee } = await checkUserRole()
+    // ✅ Allow both roles
+    const { isEmployee, isSales } = await checkUserRole()
     
-    if (!isEmployee) {
-      throw new AuthenticationError("Access denied. Employee privileges required.", 403)
+    if (!isEmployee && !isSales) {
+      throw new AuthenticationError("Access denied. Employee or Sales privileges required.", 403)
     }
 
     const headers = await getAuthHeaders()
@@ -296,7 +298,8 @@ export async function getEmployeeAttendanceData() {
       console.error("getEmployeeAttendanceData: Error response:", errorText)
       
       if (response.status === 403) {
-        throw new AuthenticationError("Access denied. Employee privileges required.", 403)
+        // ✅ Updated message
+        throw new AuthenticationError("Access denied. Employee or Sales privileges required.", 403)
       }
       
       throw new Error(`Failed to load attendance data: ${response.status}`)
@@ -308,7 +311,6 @@ export async function getEmployeeAttendanceData() {
   } catch (error: any) {
     console.error("getEmployeeAttendanceData: Error:", error)
     
-    // Use error handler for user-friendly messages
     const friendlyMessage = errorHandlers.auth(error, false)
     throw new Error(friendlyMessage)
   }
@@ -327,10 +329,10 @@ export async function getEmployeeAttendanceHistory({
   year?: string
 } = {}) {
   try {
-    const { isEmployee } = await checkUserRole()
-    
-    if (!isEmployee) {
-      throw new AuthenticationError("Access denied. Employee privileges required.", 403)
+    const { isEmployee, isSales } = await checkUserRole() // ✅ Get both in one call if possible
+
+    if (!isEmployee && !isSales) {
+      throw new AuthenticationError("Access denied. Employee or Sales privileges required.", 403)
     }
 
     const headers = await getAuthHeaders()
@@ -355,7 +357,8 @@ export async function getEmployeeAttendanceHistory({
       console.error('getEmployeeAttendanceHistory: Error response:', response.status, errorText)
       
       if (response.status === 403) {
-        throw new AuthenticationError("Access denied. Employee privileges required.", 403)
+        // ✅ Updated message to reflect actual requirement
+        throw new AuthenticationError("Access denied. Employee or Sales privileges required.", 403)
       }
       
       throw new Error(`Failed to load attendance history: ${response.status}`)
@@ -367,7 +370,6 @@ export async function getEmployeeAttendanceHistory({
   } catch (error: any) {
     console.error("getEmployeeAttendanceHistory: Error:", error)
     
-    // Use error handler for user-friendly messages
     const friendlyMessage = errorHandlers.auth(error, false)
     throw new Error(friendlyMessage)
   }

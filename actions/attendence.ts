@@ -276,3 +276,52 @@ export async function exportAttendanceRecordsAction({
     return { success: false, message }
   }
 }
+
+
+export async function getUnifiedAttendanceAction({
+  page = 1,
+  limit = 10,
+  startDate,
+  endDate,
+  search,
+}: {
+  page?: number;
+  limit?: number;
+  startDate?: Date;
+  endDate?: Date;
+  search?: string;
+}) {
+  try {
+    const headers = await getAuthHeaders();
+    const params = new URLSearchParams({
+      page: page.toString(),
+      limit: limit.toString(),
+      startDate: startDate!.toISOString(),
+      endDate: endDate!.toISOString(),
+    });
+    if (search) params.append("search", search);
+
+    const url = `${process.env.NEXT_PUBLIC_SERVER_URL}/api/admin/attendance/unified?${params.toString()}`;
+
+    const res = await fetchWithRetry(url, {
+      method: "GET",
+      headers,
+      cache: "no-store",
+    });
+
+    if (!res.ok) throw new Error("Failed to load unified attendance");
+
+    const result = await res.json();
+    return {
+      success: true,
+      data: result.data,
+      pagination: result.pagination,
+    };
+  } catch (error: any) {
+    console.error("getUnifiedAttendanceAction error:", error);
+    return {
+      success: false,
+      message: error.message || "Unable to load attendance data",
+    };
+  }
+}
