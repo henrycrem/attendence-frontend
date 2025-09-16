@@ -22,6 +22,8 @@ import {
   Currency,
   ChevronLeft,
   ChevronRight,
+  UserCheck,
+  DollarSign,
 } from "lucide-react";
 
 interface SidebarUser {
@@ -287,6 +289,34 @@ export default function AppSidebar({ user, error }: SidebarProps) {
                 href="/dashboard/sales-report"
                 icon={<Currency size={18} />}
                 label="Sales Reports"
+                isCollapsed={isCollapsed}
+              />
+               <NavItem
+                href="/dashboard/clients-report"
+                icon={<UserCheck size={18} />}
+                label="Clients Reports"
+                isCollapsed={isCollapsed}
+              />
+            </CollapsibleSection>
+          )}
+
+          {isAdmin && (
+            <CollapsibleSection
+              title="SALES SETTINGS"
+              isExpanded={expandedSections.reports}
+              onToggle={() =>
+                setExpandedSections((prev) => ({
+                  ...prev,
+                  reports: !prev.reports,
+                }))
+              }
+              isCollapsed={isCollapsed}
+            >
+         
+              <NavItem
+                href="/dashboard/sales-settings"
+                icon={<DollarSign size={18} />}
+                label="Sales Settings"
                 isCollapsed={isCollapsed}
               />
             </CollapsibleSection>

@@ -63,7 +63,7 @@ const NotFoundPage: React.FC = () => {
             
             <h3 className="text-lg font-semibold text-gray-800 mb-3">Oops! Page Not Found</h3>
             <p className="text-gray-600 mb-4 leading-relaxed">
-              The page you're looking for doesn't exist in the Jamelia Hospital Management System. 
+              The page you're looking for doesn't exist in the Telecel Liberia Attendence & Sales Management System. 
               It may have been moved, deleted, or the URL might be incorrect.
             </p>
 
@@ -71,7 +71,7 @@ const NotFoundPage: React.FC = () => {
             <div className="text-xs text-gray-500 bg-gray-100 rounded p-3 font-mono border mb-4">
               <div>Error Code: HM-404-NOT-FOUND</div>
               <div>Timestamp: {new Date().toLocaleString()}</div>
-              <div>Module: Jamelia Hospital Management System</div>
+              <div>Module: Telecel Liberia Attendence & Sales Management System</div>
             </div>
 
             <p className="text-sm text-gray-600">

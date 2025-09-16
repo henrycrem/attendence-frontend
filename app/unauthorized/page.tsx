@@ -65,7 +65,7 @@ const UnauthorizedPage: React.FC = () => {
             
             <h3 className="text-lg font-semibold text-gray-800 mb-3">Unauthorized Access</h3>
             <p className="text-gray-600 mb-4 leading-relaxed">
-              You don't have permission to access this page in the Jamelia Hospital Management System. 
+              You don't have permission to access this page in the Telecel Liberia Attendance System. 
               This could be due to insufficient privileges or an expired session.
             </p>
 
@@ -73,7 +73,7 @@ const UnauthorizedPage: React.FC = () => {
             <div className="text-xs text-gray-500 bg-gray-100 rounded p-3 font-mono border mb-4">
               <div>Error Code: HM-401-UNAUTHORIZED</div>
               <div>Timestamp: {new Date().toLocaleString()}</div>
-              <div>Module: Jamelia Hospital Management System</div>
+              <div>Module: Telecel Liberia Attendance System</div>
             </div>
 
             <p className="text-sm text-gray-600">

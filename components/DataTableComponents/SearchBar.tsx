@@ -57,7 +57,7 @@ export default function SearchBar({
           autoComplete="search"
           value={searchTerm}
           onChange={handleSearch}
-          placeholder="Search patients by name..."
+          placeholder="Search by name..."
           className="block w-full rounded-lg border border-gray-200 py-2.5 text-gray-900 shadow-sm placeholder:text-gray-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 sm:text-sm pl-10 bg-white transition-colors"
         />
       </div>

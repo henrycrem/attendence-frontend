@@ -75,7 +75,11 @@ function DashboardContent({ children, user, error }: ClientDashboardLayoutProps)
 
       {/* Right Sidebar */}
       <div className="flex-shrink-0 z-50">
-        <RightSidebar isCollapsed={isRightSidebarCollapsed} onToggle={toggleRightSidebar} />
+        <RightSidebar 
+  isCollapsed={isRightSidebarCollapsed} 
+  onToggle={toggleRightSidebar}
+  user={user} // ✅ Pass user
+/>
       </div>
     </div>
   )
