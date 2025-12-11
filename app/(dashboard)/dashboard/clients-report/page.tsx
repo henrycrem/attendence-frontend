@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import ProspectiveClientsTable from "@/components/admin-prospective-client/table";
-import ProspectiveClientDetails from "@/components/admin-prospective-client/details";
+import ProspectiveClientsTable from "../../../../components/admin-prospective-client/table";
+import ProspectiveClientDetails from "../../../../components/admin-prospective-client/details";
 import { useQuery } from "@tanstack/react-query";
-import { getAdminProspectiveClientByIdAction } from "@/actions/dashboard";
-import { useAuth } from "@/contexts/AuthContext";
+import { getAdminProspectiveClientByIdAction } from "../../../../actions/dashboard";
+import { useAuth } from "../../../../contexts/AuthContext";
 import { useRouter } from "next/navigation";
 
 export default function ProspectiveClientManagement() {
