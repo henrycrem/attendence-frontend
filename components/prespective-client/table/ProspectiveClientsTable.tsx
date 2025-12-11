@@ -71,7 +71,7 @@ export default function ProspectiveClientsTable({ onViewClient }: Props) {
             My Prospective Clients
           </h2>
           <div className="flex flex-col lg:flex-row gap-y-2 items-center gap-x-2">
-            <Link href="/dashboard/prespective-client/new">
+            <Link href="/dashboard/prospective-client/new">
               <Button size="sm" className="w-full lg:w-auto bg-primary text-primary-foreground cursor-pointer">
                 <Plus className="size-4 mr-2" />
                 Add New Client

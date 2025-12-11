@@ -218,7 +218,7 @@ export default function AppSidebar({ user, error }: SidebarProps) {
               isCollapsed={isCollapsed}
             >
               <NavItem
-                href="/dashboard/prespective-client"
+                href="/dashboard/prospective-client"
                 icon={<UserCog size={18} />}
                 label="All Clients"
                 isCollapsed={isCollapsed}
