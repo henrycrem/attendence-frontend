@@ -34,6 +34,7 @@ import { getSalesTableData } from "@/actions/dashboard"
 import AttendanceTable from "@/components/admin/attendance-table"
 import SalesTable from "@/components/SalesTable"
 import { generateAttendanceReport, generateSalesReport, generateTeamReport } from "@/actions/reports"
+import Link from "next/link"
 
 export interface SalesRecord {
   id: string
@@ -277,7 +278,9 @@ export default function SuperAdminDashboard() {
         {/* KPI Cards - Red/White/Black Theme */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {/* Attendance Cards */}
-          <Card className="bg-red-600 text-white border-2 border-red-700 shadow-lg">
+          <Link href="/dashboard/employees" className="cursor-pointer">
+          <Card className="bg-red-600 text-white border-2 border-red-700 shadow-lg cursor-pointer">
+
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-semibold opacity-90">Total Employees</CardTitle>
               <Users className="h-5 w-5" />
@@ -287,7 +290,8 @@ export default function SuperAdminDashboard() {
               <p className="text-sm opacity-90">{data.attendanceStats.presentToday} present today</p>
             </CardContent>
           </Card>
-
+          </Link>
+            <Link href="/dashboard/attendance-report" className="cursor-pointer">
           <Card className="bg-white text-black border-2 border-red-300 shadow-lg">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-semibold text-black">Attendance Rate</CardTitle>
@@ -300,8 +304,10 @@ export default function SuperAdminDashboard() {
               <p className="text-sm text-gray-700">{data.attendanceStats.lateArrivals} late arrivals</p>
             </CardContent>
           </Card>
+          </Link>
 
           {/* Sales Cards */}
+          <Link href="/dashboard/sales-report" className="cursor-pointer">
           <Card className="bg-black text-white border-2 border-gray-800 shadow-lg">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-semibold opacity-90">Total Revenue</CardTitle>
@@ -312,7 +318,9 @@ export default function SuperAdminDashboard() {
               <p className="text-sm opacity-80">{data.salesStats.totalConversions} conversions</p>
             </CardContent>
           </Card>
-
+          </Link>
+          
+            <Link href="/dashboard/sales-settings" className="cursor-pointer">  
           <Card className="bg-white text-black border-2 border-black shadow-lg">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-semibold text-black">Sales Target ({selectedPeriod})</CardTitle>
@@ -325,6 +333,7 @@ export default function SuperAdminDashboard() {
               <p className="text-sm text-gray-700">{data.salesStats.remainingToTarget.toFixed(1)} to target</p>
             </CardContent>
           </Card>
+          </Link>
         </div>
 
         {/* Tabs */}

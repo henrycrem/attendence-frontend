@@ -1,4 +1,7 @@
-import { getUnifiedAttendanceAction, exportAttendanceRecordsAction } from "@/actions/attendence"
+import {
+  getUnifiedAttendanceAction as fetchUnifiedAttendanceAction,
+  exportAttendanceRecordsAction,
+} from "@/actions/attendence"
 import { AttendanceReportTable } from "@/components/attendance-report-table"
 import type { AttendanceFilter, AttendanceStatusFilter } from "@/types/attendance"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -78,7 +81,7 @@ export default async function AttendanceReportPage({ searchParams }: AttendanceR
     endDate = customDateRange.to
   }
 
-  const result = await getUnifiedAttendanceAction({
+  const result = await fetchUnifiedAttendanceAction({
     page,
     limit,
     startDate,

@@ -1,7 +1,7 @@
-"use client";
+"use client"
 
-import type React from "react";
-import { useState, useEffect, useMemo, useCallback } from "react";
+import type React from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import {
   type ColumnDef,
   flexRender,
@@ -11,54 +11,55 @@ import {
   getFilteredRowModel,
   getSortedRowModel,
   type SortingState,
-} from "@tanstack/react-table";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { cn } from "@/lib/utils";
-import { format } from "date-fns";
-import { CalendarIcon, Loader2 } from "lucide-react";
-import { formatDate, formatTime, getDayRange, getWeekRange, getMonthRange } from "@/lib/date-utils";
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { toast } from "sonner";
+} from "@tanstack/react-table"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar } from "@/components/ui/calendar"
+import { cn } from "@/lib/utils"
+import { format } from "date-fns"
+import { CalendarIcon, Loader2, Eye } from "lucide-react"
+import { formatTime, getDayRange, getWeekRange, getMonthRange } from "@/lib/date-utils"
+import { useRouter, usePathname, useSearchParams } from "next/navigation"
+import { toast } from "sonner"
+import Link from "next/link"
 
-// ✅ Define the unified session type
 export type UnifiedAttendanceSession = {
-  userId: string;
-  name: string;
-  date: string;
-  signInTime: Date | null;
-  signOutTime: Date | null;
-  signInMethod: "fingerprint" | "remote_app" | null;
-  signInSource: "dahua" | "system" | null;
-  signOutMethod: "fingerprint" | "remote_app" | null;
-  signOutSource: "dahua" | "system" | null;
-  email?: string;
-  position?: string;
-  department?: string | null;
-  workplace?: string | null;
-};
+  id: string
+  userId: string
+  name: string
+  date: string
+  signInTime: Date | null
+  signOutTime: Date | null
+  signInMethod: "fingerprint" | "remote_app" | null
+  signInSource: "dahua" | "system" | null
+  signOutMethod: "fingerprint" | "remote_app" | null
+  signOutSource: "dahua" | "system" | null
+  email?: string
+  position?: string
+  department?: string | null
+  workplace?: string | null
+}
 
 interface AttendanceReportTableProps {
-  initialData: UnifiedAttendanceSession[];
-  initialTotalRecords: number;
-  initialCurrentPage: number;
-  initialPageSize: number;
-  initialSearchQuery: string;
-  initialStatusFilter: string;
-  initialDateFilterType: string;
-  initialSelectedDate?: Date;
-  initialCustomDateRange: { from?: Date; to?: Date };
+  initialData: UnifiedAttendanceSession[]
+  initialTotalRecords: number
+  initialCurrentPage: number
+  initialPageSize: number
+  initialSearchQuery: string
+  initialStatusFilter: string
+  initialDateFilterType: string
+  initialSelectedDate?: Date
+  initialCustomDateRange: { from?: Date; to?: Date }
   onExport: (filters: {
-    startDate?: Date;
-    endDate?: Date;
-    search?: string;
-    status?: string;
-  }) => Promise<any>;
-  isLoading: boolean;
+    startDate?: Date
+    endDate?: Date
+    search?: string
+    status?: string
+  }) => Promise<any>
+  isLoading: boolean
 }
 
 export function AttendanceReportTable({
@@ -74,32 +75,39 @@ export function AttendanceReportTable({
   onExport,
   isLoading,
 }: AttendanceReportTableProps) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
 
-  const [data, setData] = useState<UnifiedAttendanceSession[]>(initialData);
-  const [totalRecords, setTotalRecords] = useState(initialTotalRecords);
-  const [currentPage, setCurrentPage] = useState(initialCurrentPage);
-  const [pageSize, setPageSize] = useState(initialPageSize);
-  const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
-  const [statusFilter, setStatusFilter] = useState(initialStatusFilter);
-  const [dateFilterType, setDateFilterType] = useState(initialDateFilterType);
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(initialSelectedDate);
-  const [customDateRange, setCustomDateRange] = useState<{ from?: Date; to?: Date }>(initialCustomDateRange);
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [isExporting, setIsExporting] = useState(false);
+  const [data, setData] = useState<UnifiedAttendanceSession[]>(initialData)
+  const [totalRecords, setTotalRecords] = useState(initialTotalRecords)
+  const [currentPage, setCurrentPage] = useState(initialCurrentPage)
+  const [pageSize, setPageSize] = useState(initialPageSize)
+  const [searchQuery, setSearchQuery] = useState(initialSearchQuery)
+  const [statusFilter, setStatusFilter] = useState(initialStatusFilter)
+  const [dateFilterType, setDateFilterType] = useState(initialDateFilterType)
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(initialSelectedDate)
+  const [customDateRange, setCustomDateRange] = useState<{ from?: Date; to?: Date }>(initialCustomDateRange)
+  const [sorting, setSorting] = useState<SortingState>([])
+  const [isExporting, setIsExporting] = useState(false)
 
   useEffect(() => {
-    setData(initialData);
-    setTotalRecords(initialTotalRecords);
-    setCurrentPage(initialCurrentPage);
-    setPageSize(initialPageSize);
-    setSearchQuery(initialSearchQuery);
-    setStatusFilter(initialStatusFilter);
-    setDateFilterType(initialDateFilterType);
-    setSelectedDate(initialSelectedDate);
-    setCustomDateRange(initialCustomDateRange);
+    if (initialData.length > 0) {
+      console.log("[v0] First attendance record:", initialData[0])
+      console.log("[v0] Available fields:", Object.keys(initialData[0]))
+    }
+  }, [initialData])
+
+  useEffect(() => {
+    setData(initialData)
+    setTotalRecords(initialTotalRecords)
+    setCurrentPage(initialCurrentPage)
+    setPageSize(initialPageSize)
+    setSearchQuery(initialSearchQuery)
+    setStatusFilter(initialStatusFilter)
+    setDateFilterType(initialDateFilterType)
+    setSelectedDate(initialSelectedDate)
+    setCustomDateRange(initialCustomDateRange)
   }, [
     initialData,
     initialTotalRecords,
@@ -110,90 +118,90 @@ export function AttendanceReportTable({
     initialDateFilterType,
     initialSelectedDate,
     initialCustomDateRange,
-  ]);
+  ])
 
   const updateUrlParams = useCallback(
     (newParams: Record<string, string | number | undefined | null>) => {
-      const current = new URLSearchParams(Array.from(searchParams.entries()));
+      const current = new URLSearchParams(Array.from(searchParams.entries()))
       Object.entries(newParams).forEach(([key, value]) => {
         if (value === undefined || value === null || value === "") {
-          current.delete(key);
+          current.delete(key)
         } else {
-          current.set(key, String(value));
+          current.set(key, String(value))
         }
-      });
-      router.push(`${pathname}?${current.toString()}`);
+      })
+      router.push(`${pathname}?${current.toString()}`)
     },
-    [pathname, router, searchParams]
-  );
+    [pathname, router, searchParams],
+  )
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newSearch = e.target.value;
-    setSearchQuery(newSearch);
-    updateUrlParams({ search: newSearch, page: 1 });
-  };
+    const newSearch = e.target.value
+    setSearchQuery(newSearch)
+    updateUrlParams({ search: newSearch, page: 1 })
+  }
 
   const handleStatusFilterChange = (value: string) => {
-    setStatusFilter(value);
-    updateUrlParams({ status: value, page: 1 });
-  };
+    setStatusFilter(value)
+    updateUrlParams({ status: value, page: 1 })
+  }
 
   const handleDateFilterTypeChange = (value: string) => {
-    setDateFilterType(value);
+    setDateFilterType(value)
     updateUrlParams({
       dateFilterType: value,
       selectedDate: undefined,
       customDateFrom: undefined,
       customDateTo: undefined,
       page: 1,
-    });
-  };
+    })
+  }
 
   const handleSelectedDateChange = (date: Date | undefined) => {
-    setSelectedDate(date);
-    updateUrlParams({ selectedDate: date?.toISOString(), page: 1 });
-  };
+    setSelectedDate(date)
+    updateUrlParams({ selectedDate: date?.toISOString(), page: 1 })
+  }
 
   const handleCustomDateRangeChange = (range: { from?: Date; to?: Date }) => {
-    setCustomDateRange(range);
+    setCustomDateRange(range)
     updateUrlParams({
       customDateFrom: range.from?.toISOString(),
       customDateTo: range.to?.toISOString(),
       page: 1,
-    });
-  };
+    })
+  }
 
   const handlePageChange = (page: number) => {
-    setCurrentPage(page);
-    updateUrlParams({ page });
-  };
+    setCurrentPage(page)
+    updateUrlParams({ page })
+  }
 
   const handlePageSizeChange = (size: string) => {
-    const newSize = parseInt(size, 10);
-    setPageSize(newSize);
-    updateUrlParams({ limit: newSize, page: 1 });
-  };
+    const newSize = Number.parseInt(size, 10)
+    setPageSize(newSize)
+    updateUrlParams({ limit: newSize, page: 1 })
+  }
 
   const handleExportClick = async () => {
-    setIsExporting(true);
-    let exportStartDate: Date | undefined;
-    let exportEndDate: Date | undefined;
+    setIsExporting(true)
+    let exportStartDate: Date | undefined
+    let exportEndDate: Date | undefined
 
     if (dateFilterType === "day" && selectedDate) {
-      const range = getDayRange(selectedDate);
-      exportStartDate = range.startDate;
-      exportEndDate = range.endDate;
+      const range = getDayRange(selectedDate)
+      exportStartDate = range.startDate
+      exportEndDate = range.endDate
     } else if (dateFilterType === "week" && selectedDate) {
-      const range = getWeekRange(selectedDate);
-      exportStartDate = range.startDate;
-      exportEndDate = range.endDate;
+      const range = getWeekRange(selectedDate)
+      exportStartDate = range.startDate
+      exportEndDate = range.endDate
     } else if (dateFilterType === "month" && selectedDate) {
-      const range = getMonthRange(selectedDate);
-      exportStartDate = range.startDate;
-      exportEndDate = range.endDate;
+      const range = getMonthRange(selectedDate)
+      exportStartDate = range.startDate
+      exportEndDate = range.endDate
     } else if (dateFilterType === "custom") {
-      exportStartDate = customDateRange.from;
-      exportEndDate = customDateRange.to;
+      exportStartDate = customDateRange.from
+      exportEndDate = customDateRange.to
     }
 
     try {
@@ -202,16 +210,15 @@ export function AttendanceReportTable({
         endDate: exportEndDate,
         search: searchQuery,
         status: statusFilter,
-      });
+      })
     } catch (error) {
-      toast.error("Failed to export data.");
-      console.error("Export error:", error);
+      toast.error("Failed to export data.")
+      console.error("Export error:", error)
     } finally {
-      setIsExporting(false);
+      setIsExporting(false)
     }
-  };
+  }
 
-  // ✅ Updated columns
   const columns: ColumnDef<UnifiedAttendanceSession>[] = useMemo(
     () => [
       {
@@ -233,42 +240,51 @@ export function AttendanceReportTable({
       {
         header: "Sign In",
         cell: (info) => {
-          const time = info.row.original.signInTime;
-          const method = info.row.original.signInMethod;
-          const source = info.row.original.signInSource;
+          const time = info.row.original.signInTime
+          const method = info.row.original.signInMethod
+          const source = info.row.original.signInSource
           return (
             <div>
               <div>{time ? formatTime(time) : "—"}</div>
-              <div className="text-xs text-gray-500">
-                {method && source ? `${method} (${source})` : "N/A"}
-              </div>
+              <div className="text-xs text-gray-500">{method && source ? `${method} (${source})` : "N/A"}</div>
             </div>
-          );
+          )
         },
       },
       {
         header: "Sign Out",
         cell: (info) => {
-          const time = info.row.original.signOutTime;
-          const method = info.row.original.signOutMethod;
-          const source = info.row.original.signOutSource;
+          const time = info.row.original.signOutTime
+          const method = info.row.original.signOutMethod
+          const source = info.row.original.signOutSource
           return (
             <div>
               <div>{time ? formatTime(time) : "—"}</div>
-              <div className="text-xs text-gray-500">
-                {method && source ? `${method} (${source})` : "N/A"}
-              </div>
+              <div className="text-xs text-gray-500">{method && source ? `${method} (${source})` : "N/A"}</div>
             </div>
-          );
+          )
         },
       },
-      {
-        header: "Workplace",
-        cell: (info) => info.row.original.workplace || "N/A",
-      },
+      // {
+      //   header: "Action",
+      //   cell: (info) => {
+      //     const rowData = info.row.original
+      //     console.log("[v0] Row data for action button:", rowData)
+      //     const attendanceId = rowData.id
+      //     console.log("[v0] Attendance ID:", attendanceId)
+
+      //     return (
+      //       <Link href={`/dashboard/employees/attendance/${attendanceId}`}>
+      //         <Button variant="ghost" size="sm">
+      //           <Eye className="h-4 w-4" />
+      //         </Button>
+      //       </Link>
+      //     )
+      //   },
+      // },
     ],
-    []
-  );
+    [],
+  )
 
   const table = useReactTable({
     data,
@@ -290,7 +306,7 @@ export function AttendanceReportTable({
     manualFiltering: true,
     manualSorting: true,
     pageCount: Math.ceil(totalRecords / pageSize),
-  });
+  })
 
   return (
     <div className="space-y-4">
@@ -331,7 +347,7 @@ export function AttendanceReportTable({
                 variant={"outline"}
                 className={cn(
                   "w-[280px] justify-start text-left font-normal",
-                  !selectedDate && "text-muted-foreground"
+                  !selectedDate && "text-muted-foreground",
                 )}
               >
                 <CalendarIcon className="mr-2 h-4 w-4" />
@@ -352,7 +368,7 @@ export function AttendanceReportTable({
                   variant={"outline"}
                   className={cn(
                     "w-[180px] justify-start text-left font-normal",
-                    !customDateRange.from && "text-muted-foreground"
+                    !customDateRange.from && "text-muted-foreground",
                   )}
                 >
                   <CalendarIcon className="mr-2 h-4 w-4" />
@@ -363,9 +379,7 @@ export function AttendanceReportTable({
                 <Calendar
                   mode="single"
                   selected={customDateRange.from}
-                  onSelect={(date) =>
-                    handleCustomDateRangeChange({ ...customDateRange, from: date || undefined })
-                  }
+                  onSelect={(date) => handleCustomDateRangeChange({ ...customDateRange, from: date || undefined })}
                   initialFocus
                 />
               </PopoverContent>
@@ -377,7 +391,7 @@ export function AttendanceReportTable({
                   variant={"outline"}
                   className={cn(
                     "w-[180px] justify-start text-left font-normal",
-                    !customDateRange.to && "text-muted-foreground"
+                    !customDateRange.to && "text-muted-foreground",
                   )}
                 >
                   <CalendarIcon className="mr-2 h-4 w-4" />
@@ -388,9 +402,7 @@ export function AttendanceReportTable({
                 <Calendar
                   mode="single"
                   selected={customDateRange.to}
-                  onSelect={(date) =>
-                    handleCustomDateRangeChange({ ...customDateRange, to: date || undefined })
-                  }
+                  onSelect={(date) => handleCustomDateRangeChange({ ...customDateRange, to: date || undefined })}
                   initialFocus
                 />
               </PopoverContent>
@@ -492,5 +504,5 @@ export function AttendanceReportTable({
         </div>
       </div>
     </div>
-  );
+  )
 }

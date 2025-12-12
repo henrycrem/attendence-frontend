@@ -1,229 +1,230 @@
 "use client"
-import { useState, useEffect } from 'react';
-import { Search, Filter, Download, Eye, Clock, RefreshCw, AlertCircle, WifiOff, Shield } from 'lucide-react';
-import { toast } from 'sonner';
-import { getTodayAttendanceRecords, exportAttendanceData, getUserRole } from '@/actions/dashboard';
-import { errorHandlers } from '@/errorHandler';
+import { useState, useEffect } from "react"
+import { Search, Download, Eye, Clock, RefreshCw, AlertCircle, WifiOff, Shield } from "lucide-react"
+import { toast } from "sonner"
+import { getTodayAttendanceRecords, exportAttendanceData, getUserRole } from "@/actions/dashboard"
+import { errorHandlers } from "@/errorHandler"
+import Link from "next/link"
 
 interface AttendanceRecord {
-  id: string;
-  name: string;
-  email: string;
-  department: string;
-  clockIn: string;
-  clockOut: string;
-  status: string;
-  hoursWorked: string;
-  signInLocation?: any;
-  signOutLocation?: any;
-  workplace?: string;
+  id: string
+  name: string
+  email: string
+  department: string
+  clockIn: string
+  clockOut: string
+  status: string
+  hoursWorked: string
+  signInLocation?: any
+  signOutLocation?: any
+  workplace?: string
 }
 
 interface PaginationData {
-  currentPage: number;
-  totalPages: number;
-  totalRecords: number;
-  hasNext: boolean;
-  hasPrev: boolean;
+  currentPage: number
+  totalPages: number
+  totalRecords: number
+  hasNext: boolean
+  hasPrev: boolean
 }
 
 export default function AttendanceTable() {
-  const [isVisible, setIsVisible] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('All');
-  const [records, setRecords] = useState<AttendanceRecord[]>([]);
-  const [pagination, setPagination] = useState<PaginationData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [exporting, setExporting] = useState(false);
-  const [userRole, setUserRole] = useState<string | null>(null);
-  const [hasAccess, setHasAccess] = useState(false);
-  const [retryCount, setRetryCount] = useState(0);
-  const [isOnline, setIsOnline] = useState(true);
+  const [isVisible, setIsVisible] = useState(false)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [filterStatus, setFilterStatus] = useState("All")
+  const [records, setRecords] = useState<AttendanceRecord[]>([])
+  const [pagination, setPagination] = useState<PaginationData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [exporting, setExporting] = useState(false)
+  const [userRole, setUserRole] = useState<string | null>(null)
+  const [hasAccess, setHasAccess] = useState(false)
+  const [retryCount, setRetryCount] = useState(0)
+  const [isOnline, setIsOnline] = useState(true)
 
   useEffect(() => {
     setTimeout(() => {
-      setIsVisible(true);
-    }, 100);
+      setIsVisible(true)
+    }, 100)
 
     // ✅ Monitor online status
     const handleOnline = () => {
-      setIsOnline(true);
-      if (error && error.includes('connection')) {
-        checkUserAccess(); // Retry when back online
+      setIsOnline(true)
+      if (error && error.includes("connection")) {
+        checkUserAccess() // Retry when back online
       }
-    };
-    const handleOffline = () => setIsOnline(false);
+    }
+    const handleOffline = () => setIsOnline(false)
 
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
+    window.addEventListener("online", handleOnline)
+    window.addEventListener("offline", handleOffline)
 
     return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
+      window.removeEventListener("online", handleOnline)
+      window.removeEventListener("offline", handleOffline)
+    }
+  }, [])
 
   // ✅ Check user role first
   useEffect(() => {
-    checkUserAccess();
-  }, []);
+    checkUserAccess()
+  }, [])
 
   useEffect(() => {
     if (hasAccess) {
-      fetchAttendanceRecords();
+      fetchAttendanceRecords()
     }
-  }, [currentPage, searchTerm, filterStatus, hasAccess]);
+  }, [currentPage, searchTerm, filterStatus, hasAccess])
 
   // ✅ Enhanced user access check
   const checkUserAccess = async () => {
     try {
-      setLoading(true);
-      setError(null);
-      
-      const roleResponse = await getUserRole();
+      setLoading(true)
+      setError(null)
+
+      const roleResponse = await getUserRole()
       if (roleResponse.success) {
-        const { role, isAdmin } = roleResponse.data;
-        setUserRole(role);
-        setHasAccess(isAdmin);
-        
+        const { role, isAdmin } = roleResponse.data
+        setUserRole(role)
+        setHasAccess(isAdmin)
+
         if (!isAdmin) {
-          setError("Access denied. Administrator privileges required to view attendance records.");
+          setError("Access denied. Administrator privileges required to view attendance records.")
         }
       }
     } catch (err: any) {
-      console.error('Failed to check user role:', err);
-      
+      console.error("Failed to check user role:", err)
+
       // ✅ Use error handler for user-friendly messages
-      const friendlyError = errorHandlers.auth(err, false);
-      setError(friendlyError);
-      
+      const friendlyError = errorHandlers.auth(err, false)
+      setError(friendlyError)
+
       // Show appropriate toast
-      if (err.message.includes('session') || err.message.includes('log in')) {
-        toast.error('Your session has expired. Please log in again.');
+      if (err.message.includes("session") || err.message.includes("log in")) {
+        toast.error("Your session has expired. Please log in again.")
       }
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   // ✅ Enhanced fetch with better error handling
   const fetchAttendanceRecords = async () => {
-    if (!hasAccess) return;
-    
+    if (!hasAccess) return
+
     try {
-      setLoading(true);
-      setError(null);
-      
+      setLoading(true)
+      setError(null)
+
       const response = await getTodayAttendanceRecords({
         page: currentPage,
         limit: 10,
         search: searchTerm,
-        status: filterStatus
-      });
-      
+        status: filterStatus,
+      })
+
       if (response.success) {
-        setRecords(response.data.records || []);
-        setPagination(response.data.pagination || null);
-        setRetryCount(0); // Reset retry count on success
-        
+        setRecords(response.data.records || [])
+        setPagination(response.data.pagination || null)
+        setRetryCount(0) // Reset retry count on success
+
         // Show success toast only after retry
         if (retryCount > 0) {
-          toast.success('Attendance records loaded successfully!');
+          toast.success("Attendance records loaded successfully!")
         }
       } else {
-        throw new Error('Failed to fetch attendance records');
+        throw new Error("Failed to fetch attendance records")
       }
     } catch (err: any) {
-      console.error('Failed to fetch attendance records:', err);
-      
+      console.error("Failed to fetch attendance records:", err)
+
       // ✅ Use error handler for user-friendly messages
-      const friendlyError = errorHandlers.auth(err, false);
-      setError(friendlyError);
-      
+      const friendlyError = errorHandlers.auth(err, false)
+      setError(friendlyError)
+
       // Show appropriate toast based on error type
-      if (err.message.includes('session') || err.message.includes('log in')) {
-        toast.error('Your session has expired. Please log in again.');
-      } else if (err.message.includes('connection') || err.message.includes('network')) {
-        toast.error('Connection issue. Please check your internet.');
-      } else if (err.message.includes('Access denied')) {
-        toast.error('Access denied. Administrator privileges required.');
+      if (err.message.includes("session") || err.message.includes("log in")) {
+        toast.error("Your session has expired. Please log in again.")
+      } else if (err.message.includes("connection") || err.message.includes("network")) {
+        toast.error("Connection issue. Please check your internet.")
+      } else if (err.message.includes("Access denied")) {
+        toast.error("Access denied. Administrator privileges required.")
       } else {
-        toast.error('Failed to load attendance records. Please try again.');
+        toast.error("Failed to load attendance records. Please try again.")
       }
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   const getStatusBadge = (status: string) => {
     const styles = {
-      'On Time': 'bg-green-100 text-green-800',
-      'Late': 'bg-red-100 text-red-800',
-      'Early': 'bg-blue-100 text-blue-800',
-      'Not Clocked In': 'bg-gray-100 text-gray-800'
-    };
-    return styles[status as keyof typeof styles] || 'bg-gray-100 text-gray-800';
-  };
+      "On Time": "bg-green-100 text-green-800",
+      Late: "bg-red-100 text-red-800",
+      Early: "bg-blue-100 text-blue-800",
+      "Not Clocked In": "bg-gray-100 text-gray-800",
+    }
+    return styles[status as keyof typeof styles] || "bg-gray-100 text-gray-800"
+  }
 
   // ✅ Enhanced export with better error handling
   const handleExport = async () => {
-    if (!hasAccess) return;
-    
+    if (!hasAccess) return
+
     try {
-      setExporting(true);
-      
+      setExporting(true)
+
       const response = await exportAttendanceData({
-        format: 'csv',
+        format: "csv",
         search: searchTerm,
-        status: filterStatus
-      });
-      
+        status: filterStatus,
+      })
+
       if (response.success && response.blob) {
         // Create download link
-        const url = window.URL.createObjectURL(response.blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = response.filename || `attendance-${new Date().toISOString().split('T')[0]}.csv`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-        
-        toast.success('Attendance data exported successfully!');
+        const url = window.URL.createObjectURL(response.blob)
+        const a = document.createElement("a")
+        a.href = url
+        a.download = response.filename || `attendance-${new Date().toISOString().split("T")[0]}.csv`
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+
+        toast.success("Attendance data exported successfully!")
       } else {
-        throw new Error('Export failed');
+        throw new Error("Export failed")
       }
     } catch (err: any) {
-      console.error('Export failed:', err);
-      
+      console.error("Export failed:", err)
+
       // ✅ Use error handler for user-friendly messages
-      const friendlyError = errorHandlers.auth(err, false);
-      setError(friendlyError);
-      toast.error(friendlyError);
+      const friendlyError = errorHandlers.auth(err, false)
+      setError(friendlyError)
+      toast.error(friendlyError)
     } finally {
-      setExporting(false);
+      setExporting(false)
     }
-  };
+  }
 
   // ✅ Enhanced retry with exponential backoff
   const handleRetry = async () => {
-    setRetryCount(prev => prev + 1);
-    
+    setRetryCount((prev) => prev + 1)
+
     // Add delay for retries to prevent spam
     if (retryCount > 0) {
-      const delay = Math.min(1000 * Math.pow(2, retryCount - 1), 5000); // Max 5 seconds
-      toast.info(`Retrying in ${delay / 1000} seconds...`);
-      await new Promise(resolve => setTimeout(resolve, delay));
+      const delay = Math.min(1000 * Math.pow(2, retryCount - 1), 5000) // Max 5 seconds
+      toast.info(`Retrying in ${delay / 1000} seconds...`)
+      await new Promise((resolve) => setTimeout(resolve, delay))
     }
-    
+
     if (hasAccess) {
-      fetchAttendanceRecords();
+      fetchAttendanceRecords()
     } else {
-      checkUserAccess();
+      checkUserAccess()
     }
-  };
+  }
 
   // ✅ Enhanced access denied message
   if (!loading && !hasAccess && error) {
@@ -233,57 +234,53 @@ export default function AttendanceTable() {
           <div className="flex justify-center mb-4">
             {!isOnline ? (
               <WifiOff className="h-12 w-12 text-gray-400" />
-            ) : error.includes('Access denied') ? (
+            ) : error.includes("Access denied") ? (
               <Shield className="h-12 w-12 text-red-500" />
             ) : (
               <AlertCircle className="h-12 w-12 text-orange-500" />
             )}
           </div>
-          
+
           <h3 className="text-lg font-semibold text-gray-800 mb-2">
-            {!isOnline ? 'No Internet Connection' : 
-             error.includes('Access denied') ? 'Access Denied' : 
-             'Unable to Load Data'}
+            {!isOnline
+              ? "No Internet Connection"
+              : error.includes("Access denied")
+                ? "Access Denied"
+                : "Unable to Load Data"}
           </h3>
-          
-          <p className="text-gray-600 mb-4 max-w-md mx-auto">
-            {error}
-          </p>
-          
+
+          <p className="text-gray-600 mb-4 max-w-md mx-auto">{error}</p>
+
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <button 
+            <button
               onClick={handleRetry}
               disabled={loading || !isOnline}
               className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              <span>{loading ? 'Retrying...' : 'Try Again'}</span>
+              <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+              <span>{loading ? "Retrying..." : "Try Again"}</span>
             </button>
-            
-            {error.includes('session') && (
-              <button 
-                onClick={() => window.location.href = '/'}
+
+            {error.includes("session") && (
+              <button
+                onClick={() => (window.location.href = "/")}
                 className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
               >
                 Go to Login
               </button>
             )}
           </div>
-          
+
           {userRole && (
             <p className="text-sm text-gray-500 mt-4">
               Current role: <span className="font-medium">{userRole}</span>
             </p>
           )}
-          
-          {retryCount > 0 && (
-            <p className="text-sm text-gray-500 mt-2">
-              Retry attempt: {retryCount}
-            </p>
-          )}
+
+          {retryCount > 0 && <p className="text-sm text-gray-500 mt-2">Retry attempt: {retryCount}</p>}
         </div>
       </div>
-    );
+    )
   }
 
   // ✅ Enhanced loading state
@@ -304,13 +301,15 @@ export default function AttendanceTable() {
           </div>
         </div>
       </div>
-    );
+    )
   }
 
   return (
-    <div className={`bg-white/95 backdrop-blur-sm rounded-xl shadow-sm border border-gray-200 transition-all duration-700 ${
-      isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
-    }`}>
+    <div
+      className={`bg-white/95 backdrop-blur-sm rounded-xl shadow-sm border border-gray-200 transition-all duration-700 ${
+        isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
+      }`}
+    >
       {/* Connection Status Indicator */}
       {!isOnline && (
         <div className="p-4 bg-orange-50 border-b border-orange-200 flex items-center space-x-2">
@@ -318,7 +317,7 @@ export default function AttendanceTable() {
           <span className="text-sm text-orange-700">You're currently offline</span>
         </div>
       )}
-      
+
       {/* Header */}
       <div className="p-6 border-b border-gray-100">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -329,34 +328,34 @@ export default function AttendanceTable() {
             <div>
               <h3 className="text-lg font-semibold text-gray-800">Today's Attendance Records</h3>
               <p className="text-sm text-gray-600">
-                {pagination ? `${pagination.totalRecords} records found` : 'Loading...'}
+                {pagination ? `${pagination.totalRecords} records found` : "Loading..."}
               </p>
             </div>
           </div>
-          
+
           <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
             {/* Search */}
             <div className="relative">
-              <input 
+              <input
                 type="text"
                 placeholder="Search employee..."
                 value={searchTerm}
                 onChange={(e) => {
-                  setSearchTerm(e.target.value);
-                  setCurrentPage(1);
+                  setSearchTerm(e.target.value)
+                  setCurrentPage(1)
                 }}
                 className="w-full sm:w-64 px-4 py-2 pl-10 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 disabled={loading}
               />
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             </div>
-            
+
             {/* Filter */}
-            <select 
+            <select
               value={filterStatus}
               onChange={(e) => {
-                setFilterStatus(e.target.value);
-                setCurrentPage(1);
+                setFilterStatus(e.target.value)
+                setCurrentPage(1)
               }}
               className="px-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
               disabled={loading}
@@ -367,25 +366,25 @@ export default function AttendanceTable() {
               <option value="Early">Early</option>
               <option value="Not Clocked In">Not Clocked In</option>
             </select>
-            
+
             {/* Refresh */}
-            <button 
+            <button
               onClick={fetchAttendanceRecords}
               disabled={loading || !isOnline}
               className="px-4 py-2 text-sm font-medium bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors duration-200 flex items-center space-x-2 disabled:opacity-50"
             >
-              <RefreshCw className={`${loading ? 'animate-spin' : ''}`} size={16} />
+              <RefreshCw className={`${loading ? "animate-spin" : ""}`} size={16} />
               <span>Refresh</span>
             </button>
-            
+
             {/* Export */}
-            <button 
+            <button
               onClick={handleExport}
               disabled={exporting || !isOnline}
               className="px-4 py-2 text-sm font-medium bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors duration-200 flex items-center space-x-2 disabled:opacity-50"
             >
-              <Download className={`${exporting ? 'animate-spin' : ''}`} size={16} />
-              <span>{exporting ? 'Exporting...' : 'Export'}</span>
+              <Download className={`${exporting ? "animate-spin" : ""}`} size={16} />
+              <span>{exporting ? "Exporting..." : "Export"}</span>
             </button>
           </div>
         </div>
@@ -396,13 +395,13 @@ export default function AttendanceTable() {
         <div className="p-6 bg-red-50 border-b border-red-200">
           <div className="flex items-center justify-between">
             <p className="text-red-600">{error}</p>
-            <button 
+            <button
               onClick={handleRetry}
               disabled={loading}
               className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center space-x-2"
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              <span>{loading ? 'Retrying...' : 'Retry'}</span>
+              <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+              <span>{loading ? "Retrying..." : "Retry"}</span>
             </button>
           </div>
         </div>
@@ -424,14 +423,15 @@ export default function AttendanceTable() {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {records.map((record, index) => (
-              <tr
-                key={record.id}
-                className="hover:bg-gray-50 transition-colors duration-150"
-              >
+              <tr key={record.id} className="hover:bg-gray-50 transition-colors duration-150">
                 <td className="px-6 py-4">
                   <div className="flex items-center space-x-3">
                     <div className="h-10 w-10 rounded-lg bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold">
-                      {record.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                      {record.name
+                        .split(" ")
+                        .map((n) => n[0])
+                        .join("")
+                        .toUpperCase()}
                     </div>
                     <div>
                       <div className="font-medium text-gray-800">{record.name}</div>
@@ -449,70 +449,71 @@ export default function AttendanceTable() {
                   </span>
                 </td>
                 <td className="px-6 py-4">
-                  <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200">
-                    <Eye className="h-4 w-4 text-gray-500" />
-                  </button>
+                  <Link href={`/dashboard/employees/attendance/${record.id}`}>
+                    <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200">
+                      <Eye className="h-4 w-4 text-gray-500" />
+                    </button>
+                  </Link>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      
+
       {/* Empty State */}
       {records.length === 0 && !loading && !error && (
         <div className="p-12 text-center">
           <Clock className="mx-auto h-12 w-12 text-gray-400 mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No attendance records found</h3>
           <p className="text-gray-500">
-            {searchTerm || filterStatus !== 'All' 
-              ? 'Try adjusting your search or filters.'
-              : 'Attendance records will appear here as employees clock in.'
-            }
+            {searchTerm || filterStatus !== "All"
+              ? "Try adjusting your search or filters."
+              : "Attendance records will appear here as employees clock in."}
           </p>
         </div>
       )}
-      
+
       {/* Pagination */}
       {pagination && pagination.totalRecords > 0 && (
         <div className="p-6 border-t border-gray-100 flex flex-col sm:flex-row justify-between items-center gap-4">
           <div className="text-sm text-gray-600">
-            Showing <span className="font-medium">{((currentPage - 1) * 10) + 1}</span> to{' '}
-            <span className="font-medium">{Math.min(currentPage * 10, pagination.totalRecords)}</span> of{' '}
+            Showing <span className="font-medium">{(currentPage - 1) * 10 + 1}</span> to{" "}
+            <span className="font-medium">{Math.min(currentPage * 10, pagination.totalRecords)}</span> of{" "}
             <span className="font-medium">{pagination.totalRecords}</span> records
           </div>
-          
+
           <div className="flex space-x-2">
-            <button 
-              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+            <button
+              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
               disabled={!pagination.hasPrev || loading}
               className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Previous
             </button>
-            
+
             {/* Page numbers */}
             {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
-              const pageNum = Math.max(1, currentPage - 2) + i;
-              if (pageNum > pagination.totalPages) return null;
-              
+              const pageNum = Math.max(1, currentPage - 2) + i
+              if (pageNum > pagination.totalPages) return null
+
               return (
                 <button
                   key={pageNum}
                   onClick={() => setCurrentPage(pageNum)}
                   className={`px-3 py-2 border rounded-lg text-sm font-medium transition-colors duration-200 ${
                     pageNum === currentPage
-                      ? 'border-gray-300 bg-gray-100 text-gray-800'
-                      : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                      ? "border-gray-300 bg-gray-100 text-gray-800"
+                      : "border-gray-200 text-gray-600 hover:bg-gray-50"
                   }`}
                 >
                   {pageNum}
                 </button>
-              );
+              )
             })}
-            
-            <button 
-              onClick={() => setCurrentPage(prev => Math.min(prev + 1, pagination.totalPages))}
+
+            <button
+              onClick={() => setCurrentPage((prev) => Math.min(prev + 1, pagination.totalPages))}
               disabled={!pagination.hasNext || loading}
               className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -522,5 +523,5 @@ export default function AttendanceTable() {
         </div>
       )}
     </div>
-  );
+  )
 }

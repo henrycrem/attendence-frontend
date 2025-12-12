@@ -24,6 +24,7 @@ import {
   ChevronRight,
   UserCheck,
   DollarSign,
+  Group,
 } from "lucide-react";
 
 interface SidebarUser {
@@ -280,9 +281,15 @@ export default function AppSidebar({ user, error }: SidebarProps) {
               isCollapsed={isCollapsed}
             >
               <NavItem
+                href="/dashboard/employees"
+                icon={<Group size={18} />}
+                label="Remote Attendence Records"
+                isCollapsed={isCollapsed}
+              />
+              <NavItem
                 href="/dashboard/attendance-report"
                 icon={<FileText size={18} />}
-                label="Attendance Reports"
+                label="Unified Attendance Report"
                 isCollapsed={isCollapsed}
               />
               <NavItem
